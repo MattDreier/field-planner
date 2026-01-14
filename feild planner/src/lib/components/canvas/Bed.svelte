@@ -8,13 +8,15 @@
 		y: number; // top-left y in pixels
 		widthPixels: number;
 		heightPixels: number;
+		pixelsPerInch: number;
+		zoom: number;
 		isSelected: boolean;
 		onSelect: (id: Id<'beds'>) => void;
 		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number) => void;
-		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet?: number) => void;
+		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, isSelected, onSelect, onMove, onResize }: Props = $props();
+	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, isSelected, onSelect, onMove, onResize }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
@@ -26,33 +28,92 @@
 	let dragStartX = $state(0);
 	let dragStartY = $state(0);
 
-	function handleMouseDown(e: MouseEvent) {
-		if (e.button !== 0) return; // Only left click
+	// Resize state
+	type ResizeHandle = 'se' | 'e' | 's' | null; // southeast (corner), east (right), south (bottom)
+	let resizeHandle = $state<ResizeHandle>(null);
+	let resizeStartX = $state(0);
+	let resizeStartY = $state(0);
+	let resizeStartWidthFeet = $state(0);
+	let resizeStartHeightFeet = $state(0);
+
+	// Minimum bed size in feet
+	const MIN_SIZE_FEET = 1;
+
+	function handlePointerDown(e: PointerEvent) {
+		if (e.button !== 0) return; // Only primary button
 		onSelect(bed._id);
 		isDragging = true;
 		dragStartX = e.clientX;
 		dragStartY = e.clientY;
+		(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 		e.stopPropagation();
 	}
 
-	function handleMouseMove(e: MouseEvent) {
-		if (!isDragging || !onMove) return;
-		const deltaX = e.clientX - dragStartX;
-		const deltaY = e.clientY - dragStartY;
-		onMove(bed._id, deltaX, deltaY);
-		dragStartX = e.clientX;
-		dragStartY = e.clientY;
+	function handlePointerMove(e: PointerEvent) {
+		if (isDragging && onMove) {
+			const deltaX = e.clientX - dragStartX;
+			const deltaY = e.clientY - dragStartY;
+			onMove(bed._id, deltaX, deltaY);
+			dragStartX = e.clientX;
+			dragStartY = e.clientY;
+		}
 	}
 
-	function handleMouseUp() {
+	function handlePointerUp(e: PointerEvent) {
 		isDragging = false;
+		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+	}
+
+	// Resize handle events
+	function handleResizePointerDown(handle: ResizeHandle, e: PointerEvent) {
+		if (e.button !== 0) return;
+		e.stopPropagation();
+		resizeHandle = handle;
+		resizeStartX = e.clientX;
+		resizeStartY = e.clientY;
+		resizeStartWidthFeet = bed.widthFeet;
+		resizeStartHeightFeet = bed.heightFeet ?? bed.widthFeet;
+		(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+	}
+
+	function handleResizePointerMove(e: PointerEvent) {
+		if (!resizeHandle || !onResize) return;
+
+		const scale = pixelsPerInch * zoom;
+		const deltaX = e.clientX - resizeStartX;
+		const deltaY = e.clientY - resizeStartY;
+
+		// Convert pixel delta to feet (12 inches per foot)
+		const deltaFeetX = deltaX / scale / 12;
+		const deltaFeetY = deltaY / scale / 12;
+
+		let newWidthFeet = resizeStartWidthFeet;
+		let newHeightFeet = resizeStartHeightFeet;
+
+		switch (resizeHandle) {
+			case 'se': // Bottom-right corner: resize both dimensions
+				newWidthFeet = Math.max(MIN_SIZE_FEET, resizeStartWidthFeet + deltaFeetX);
+				newHeightFeet = Math.max(MIN_SIZE_FEET, resizeStartHeightFeet + deltaFeetY);
+				break;
+			case 'e': // Right edge: resize width only
+				newWidthFeet = Math.max(MIN_SIZE_FEET, resizeStartWidthFeet + deltaFeetX);
+				break;
+			case 's': // Bottom edge: resize height only
+				newHeightFeet = Math.max(MIN_SIZE_FEET, resizeStartHeightFeet + deltaFeetY);
+				break;
+		}
+
+		onResize(bed._id, newWidthFeet, newHeightFeet);
+	}
+
+	function handleResizePointerUp(e: PointerEvent) {
+		resizeHandle = null;
+		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
 	}
 
 	// Resize handles (shown when selected)
 	const handleSize = 8;
 </script>
-
-<svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} />
 
 <g class="bed" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id)}>
 	{#if bed.shape === 'rectangle'}
@@ -67,10 +128,12 @@
 			stroke-width={strokeWidth}
 			rx="4"
 			ry="4"
-			class="cursor-move"
+			class="cursor-move touch-none"
 			role="button"
 			tabindex="-1"
-			onmousedown={handleMouseDown}
+			onpointerdown={handlePointerDown}
+			onpointermove={handlePointerMove}
+			onpointerup={handlePointerUp}
 		/>
 	{:else}
 		<!-- Circular bed -->
@@ -82,10 +145,12 @@
 			fill={fillColor}
 			stroke={strokeColor}
 			stroke-width={strokeWidth}
-			class="cursor-move"
+			class="cursor-move touch-none"
 			role="button"
 			tabindex="-1"
-			onmousedown={handleMouseDown}
+			onpointerdown={handlePointerDown}
+			onpointermove={handlePointerMove}
+			onpointerup={handlePointerUp}
 		/>
 	{/if}
 
@@ -114,7 +179,7 @@
 
 	<!-- Resize handles (only shown when selected) -->
 	{#if isSelected && onResize && bed.shape === 'rectangle'}
-		<!-- Bottom-right corner handle -->
+		<!-- Bottom-right corner handle (SE) -->
 		<rect
 			x={x + widthPixels - handleSize / 2}
 			y={y + heightPixels - handleSize / 2}
@@ -123,9 +188,15 @@
 			fill="white"
 			stroke="rgb(59, 130, 246)"
 			stroke-width="2"
-			class="cursor-se-resize"
+			class="cursor-se-resize touch-none"
+			role="button"
+			tabindex="-1"
+			aria-label="Resize bed from corner"
+			onpointerdown={(e) => handleResizePointerDown('se', e)}
+			onpointermove={handleResizePointerMove}
+			onpointerup={handleResizePointerUp}
 		/>
-		<!-- Right-center handle -->
+		<!-- Right-center handle (E) -->
 		<rect
 			x={x + widthPixels - handleSize / 2}
 			y={y + heightPixels / 2 - handleSize / 2}
@@ -134,9 +205,15 @@
 			fill="white"
 			stroke="rgb(59, 130, 246)"
 			stroke-width="2"
-			class="cursor-e-resize"
+			class="cursor-e-resize touch-none"
+			role="button"
+			tabindex="-1"
+			aria-label="Resize bed width"
+			onpointerdown={(e) => handleResizePointerDown('e', e)}
+			onpointermove={handleResizePointerMove}
+			onpointerup={handleResizePointerUp}
 		/>
-		<!-- Bottom-center handle -->
+		<!-- Bottom-center handle (S) -->
 		<rect
 			x={x + widthPixels / 2 - handleSize / 2}
 			y={y + heightPixels - handleSize / 2}
@@ -145,7 +222,13 @@
 			fill="white"
 			stroke="rgb(59, 130, 246)"
 			stroke-width="2"
-			class="cursor-s-resize"
+			class="cursor-s-resize touch-none"
+			role="button"
+			tabindex="-1"
+			aria-label="Resize bed height"
+			onpointerdown={(e) => handleResizePointerDown('s', e)}
+			onpointermove={handleResizePointerMove}
+			onpointerup={handleResizePointerUp}
 		/>
 	{/if}
 </g>

@@ -4,10 +4,16 @@
 	import BedTools from '$lib/components/sidebar/BedTools.svelte';
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
 	import ZoomControls from '$lib/components/layout/ZoomControls.svelte';
+	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, DragSource, Bed, PlacedPlant } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus } from 'lucide-svelte';
+	import { history } from '$lib/stores/history.svelte';
+	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
+
+	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
+	const convexAvailable = $derived(isConvexAvailable());
 
 	// Canvas state
 	let zoom = $state(1.0);
@@ -77,6 +83,9 @@
 		widthFeet: number,
 		heightFeet?: number
 	) {
+		// Save state before mutation
+		history.push(beds, plants);
+
 		const newBed: Bed = {
 			_id: `bed-${Date.now()}` as Id<'beds'>,
 			layoutId: 'local-layout' as Id<'layouts'>,
@@ -93,8 +102,23 @@
 
 	// Bed move handler
 	function handleMoveBed(id: Id<'beds'>, newX: number, newY: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
 		beds = beds.map((b) =>
 			b._id === id ? { ...b, x: newX, y: newY } : b
+		);
+	}
+
+	// Bed resize handler
+	function handleResizeBed(id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
+		beds = beds.map((b) =>
+			b._id === id
+				? { ...b, widthFeet: newWidthFeet, ...(b.shape === 'rectangle' ? { heightFeet: newHeightFeet } : {}) }
+				: b
 		);
 	}
 
@@ -108,6 +132,9 @@
 		spacingMin: number,
 		heightMax: number
 	) {
+		// Save state before mutation
+		history.push(beds, plants);
+
 		const newPlant: PlacedPlant = {
 			_id: `plant-${Date.now()}` as Id<'placedPlants'>,
 			bedId,
@@ -125,6 +152,9 @@
 
 	// Plant move handler
 	function handleMovePlant(id: Id<'placedPlants'>, x: number, y: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
 		plants = plants.map((p) =>
 			p._id === id ? { ...p, x, y } : p
 		);
@@ -133,9 +163,15 @@
 	// Delete handler
 	function handleDelete() {
 		if (selectedPlantId) {
+			// Save state before mutation
+			history.push(beds, plants);
+
 			plants = plants.filter((p) => p._id !== selectedPlantId);
 			selectedPlantId = null;
 		} else if (selectedBedId) {
+			// Save state before mutation
+			history.push(beds, plants);
+
 			// Remove bed and its plants
 			plants = plants.filter((p) => p.bedId !== selectedBedId);
 			beds = beds.filter((b) => b._id !== selectedBedId);
@@ -151,7 +187,67 @@
 	function handleDragEnd() {
 		dragSource = null;
 	}
+
+	// Keyboard shortcuts
+	function handleKeyDown(e: KeyboardEvent) {
+		// Skip if user is typing in an input
+		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+			return;
+		}
+
+		const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+		const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			// Delete selected item
+			e.preventDefault();
+			handleDelete();
+		}
+
+		if (e.key === 'Escape') {
+			// Clear selection
+			selectedBedId = null;
+			selectedPlantId = null;
+		}
+
+		if (modKey && e.key === 'z') {
+			e.preventDefault();
+			if (e.shiftKey) {
+				// Redo: Cmd/Ctrl+Shift+Z
+				const snapshot = history.redo();
+				if (snapshot) {
+					beds = snapshot.beds;
+					plants = snapshot.plants;
+					selectedBedId = null;
+					selectedPlantId = null;
+				}
+			} else {
+				// Undo: Cmd/Ctrl+Z
+				const snapshot = history.undo();
+				if (snapshot) {
+					beds = snapshot.beds;
+					plants = snapshot.plants;
+					selectedBedId = null;
+					selectedPlantId = null;
+				}
+			}
+		}
+
+		// Alternative Redo: Cmd/Ctrl+Y (common on Windows)
+		if (modKey && e.key === 'y') {
+			e.preventDefault();
+			const snapshot = history.redo();
+			if (snapshot) {
+				beds = snapshot.beds;
+				plants = snapshot.plants;
+				selectedBedId = null;
+				selectedPlantId = null;
+			}
+		}
+	}
 </script>
+
+<svelte:window onkeydown={handleKeyDown} />
 
 <div class="flex flex-col h-screen">
 	<!-- Header -->
@@ -164,6 +260,11 @@
 		</div>
 
 		<div class="flex items-center gap-4">
+			<LayoutManager
+				isConvexAvailable={convexAvailable}
+				{beds}
+				{plants}
+			/>
 			<ZoomControls {zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
 		</div>
 	</header>
@@ -208,6 +309,7 @@
 					onSelectPlant={selectPlant}
 					onCreateBed={handleCreateBed}
 					onMoveBed={handleMoveBed}
+					onResizeBed={handleResizeBed}
 					onPlacePlant={handlePlacePlant}
 					onMovePlant={handleMovePlant}
 				/>

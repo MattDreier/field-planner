@@ -1,6 +1,6 @@
 # Field Planner - Development Progress
 
-## Status: Paused (Build Working)
+## Status: Ready for Testing ✅
 
 **Last Updated:** 2026-01-14
 
@@ -42,6 +42,17 @@
 - [x] Plants mutations/queries
 - [x] Placeholder generated types for demo mode
 
+### Phase 6: Polish & Features ✅
+- [x] SVG a11y fix (aria-label on canvas)
+- [x] Button component Svelte 5 migration (`{@render children()}`)
+- [x] Convex persistence adapter (local/live mode toggle)
+- [x] Bed resizing via drag handles (SE corner, E edge, S edge)
+- [x] Pointer Events API (mouse + touch + stylus support)
+- [x] Keyboard shortcuts (Delete, Escape, Ctrl+Z/Y)
+- [x] Undo/Redo history (50 snapshot limit)
+- [x] Export to PNG functionality
+- [x] Layout Manager UI component
+
 ---
 
 ## Working Features
@@ -49,30 +60,34 @@
 1. **Bed Creation** - Click Rectangle/Circle tool, then drag on canvas
 2. **Bed Selection** - Click beds to select, shows dimension label
 3. **Bed Movement** - Drag selected beds to reposition
-4. **Plant Drag-and-Drop** - Drag flowers from palette onto beds
-5. **Spacing Visualization** - Circles show minimum spacing per plant
-6. **Collision Detection** - Overlapping spacing circles turn red
-7. **Height Color Coding** - Blue (short) → Red (tall), relative to placed plants
-8. **Zoom Controls** - Zoom in/out and reset view
+4. **Bed Resizing** - Drag corner/edge handles on selected rectangle beds
+5. **Plant Drag-and-Drop** - Drag flowers from palette onto beds
+6. **Spacing Visualization** - Circles show minimum spacing per plant
+7. **Collision Detection** - Overlapping spacing circles turn red
+8. **Height Color Coding** - Blue (short) → Red (tall), relative to placed plants
+9. **Zoom Controls** - Zoom in/out and reset view
+10. **Keyboard Shortcuts** - Delete, Escape, Ctrl+Z (undo), Ctrl+Y (redo)
+11. **Touch Support** - Works on tablets and mobile devices
+12. **Undo/Redo** - Full history with 50 state snapshots
+13. **Export PNG** - Download canvas as high-resolution image
 
 ---
 
-## Remaining Work
+## Human Tasks (Testing Required)
 
-### High Priority
-- [ ] Fix SVG a11y warning (add role="img")
-- [ ] Update Button component to use `{@render}` instead of `<slot>`
-- [ ] Wire up Convex for persistence (requires `bunx convex dev`)
+### To Test Locally
+```bash
+cd "/opt/Projects/heat-and-harvest/feild planner"
+bun run dev
+# Open http://localhost:5173
+```
 
-### Medium Priority
-- [ ] Implement bed resizing via drag handles
-- [ ] Add keyboard shortcuts (Delete, Esc, Ctrl+Z)
-- [ ] Touch/mobile support for drag operations
-
-### Low Priority
-- [ ] Layout save/load UI
-- [ ] Export to image/PDF
-- [ ] Undo/redo history
+### To Enable Convex Persistence (Optional)
+```bash
+bunx convex dev
+# Set VITE_CONVEX_URL in .env
+# Restart dev server
+```
 
 ---
 
@@ -124,6 +139,21 @@ src/
 
 ## Known Issues
 
-1. **A11y Warning**: SVG element has mouse handlers but no role attribute
-2. **Deprecation Warning**: Button uses `<slot>` instead of `{@render}`
-3. **Demo Mode Only**: Convex not connected - data stored in memory only
+All previously tracked issues have been resolved:
+- ~~A11y Warning~~ → Fixed with aria-label
+- ~~Deprecation Warning~~ → Button migrated to Svelte 5 snippets
+- ~~Demo Mode Only~~ → Persistence adapter supports both local and Convex modes
+
+## New Files Added
+
+```
+src/lib/
+├── stores/
+│   ├── persistence.svelte.ts   # Local/Convex mode toggle
+│   ├── data.svelte.ts          # Unified data access layer
+│   └── history.svelte.ts       # Undo/redo state management
+├── utils/
+│   └── export.ts               # SVG to PNG export
+└── components/layout/
+    └── LayoutManager.svelte    # Save/load UI (for Convex mode)
+```

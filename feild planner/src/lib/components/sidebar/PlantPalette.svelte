@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { FLOWER_DATABASE, type FlowerData } from '../../../../flowers';
+	import { FLOWER_DATABASE, type FlowerData } from '$lib/data/flowers';
 	import PlantCard from './PlantCard.svelte';
 	import type { DragSource } from '$lib/types';
 

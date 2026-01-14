@@ -26,6 +26,7 @@
 		onSelectPlant: (id: Id<'placedPlants'> | null) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
 		onMoveBed: (id: Id<'beds'>, newX: number, newY: number) => void;
+		onResizeBed: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
 	}
@@ -47,6 +48,7 @@
 		onSelectPlant,
 		onCreateBed,
 		onMoveBed,
+		onResizeBed,
 		onPlacePlant,
 		onMovePlant
 	}: Props = $props();
@@ -103,7 +105,7 @@
 	let bedCurrentX = $state(0);
 	let bedCurrentY = $state(0);
 
-	function handleCanvasMouseDown(e: MouseEvent) {
+	function handleCanvasPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
 
 		// Clear selection when clicking on empty canvas
@@ -123,19 +125,21 @@
 			bedStartY = y;
 			bedCurrentX = x;
 			bedCurrentY = y;
+			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 		}
 	}
 
-	function handleCanvasMouseMove(e: MouseEvent) {
+	function handleCanvasPointerMove(e: PointerEvent) {
 		if (!isCreatingBed) return;
 		const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
 		bedCurrentX = e.clientX - rect.left;
 		bedCurrentY = e.clientY - rect.top;
 	}
 
-	function handleCanvasMouseUp(e: MouseEvent) {
+	function handleCanvasPointerUp(e: PointerEvent) {
 		if (!isCreatingBed) return;
 		isCreatingBed = false;
+		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
 
 		// Calculate bed dimensions
 		const minX = Math.min(bedStartX, bedCurrentX);
@@ -213,14 +217,14 @@
 <svg
 	width={canvasWidthPx}
 	height={canvasHeightPx}
-	class="border border-border rounded-lg shadow-inner"
-	onmousedown={handleCanvasMouseDown}
-	onmousemove={handleCanvasMouseMove}
-	onmouseup={handleCanvasMouseUp}
+	class="border border-border rounded-lg shadow-inner touch-none"
+	onpointerdown={handleCanvasPointerDown}
+	onpointermove={handleCanvasPointerMove}
+	onpointerup={handleCanvasPointerUp}
 	ondrop={handleDrop}
 	ondragover={handleDragOver}
 	role="application"
-	aria-label="Field planner canvas"
+	aria-label="Garden field planner canvas"
 >
 	<!-- Grid background -->
 	<GridBackground
@@ -242,9 +246,12 @@
 			y={canvasPos.y}
 			widthPixels={widthPx}
 			heightPixels={heightPx}
+			{pixelsPerInch}
+			{zoom}
 			isSelected={selectedBedId === bed._id}
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
+			onResize={onResizeBed}
 		/>
 	{/each}
 

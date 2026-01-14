@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Button as ButtonPrimitive } from 'bits-ui';
 	import { type Props, buttonVariants } from './index.js';
 	import { cn } from '$lib/utils.js';
@@ -9,6 +10,7 @@
 		class: className,
 		variant = 'default',
 		size = 'default',
+		children,
 		...restProps
 	}: $$Props = $props();
 </script>
@@ -17,5 +19,5 @@
 	class={cn(buttonVariants({ variant, size, className }))}
 	{...restProps}
 >
-	<slot />
+	{@render children?.()}
 </ButtonPrimitive.Root>

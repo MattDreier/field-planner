@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FlowerData } from '../../../../flowers';
+	import type { FlowerData } from '$lib/data/flowers';
 	import { formatHeight } from '$lib/utils/color';
 
 	interface Props {
