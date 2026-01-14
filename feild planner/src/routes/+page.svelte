@@ -561,7 +561,6 @@
 				onZoomIn={zoomIn}
 				onZoomOut={zoomOut}
 				onReset={resetZoom}
-				showCompass={sunSimulation.enabled}
 			/>
 		</main>
 
