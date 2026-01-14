@@ -10,12 +10,13 @@
 		spacingRadiusPixels: number;
 		heightColor: string;
 		hasConflict: boolean;
+		isShaded?: boolean;
 		isSelected: boolean;
 		onSelect: (id: Id<'placedPlants'>) => void;
 		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number) => void;
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isSelected, onSelect, onMove }: Props = $props();
+	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, onSelect, onMove }: Props = $props();
 
 	// Plant marker size (visual representation)
 	const markerRadius = 8;
@@ -51,17 +52,18 @@
 	}
 </script>
 
-<g class="placed-plant" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id)}>
-	<!-- Spacing circle (semi-transparent) -->
+<g class="placed-plant" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id)}>
+	<!-- Spacing circle (semi-transparent, turns grey when shaded) -->
 	<SpacingCircle
 		{cx}
 		{cy}
 		radius={spacingRadiusPixels}
 		{hasConflict}
+		{isShaded}
 		{isSelected}
 	/>
 
-	<!-- Plant marker (solid circle with height-based color) -->
+	<!-- Plant marker (solid circle with height-based color, greyed when shaded) -->
 	<circle
 		{cx}
 		{cy}
@@ -69,6 +71,7 @@
 		fill={heightColor}
 		stroke={isSelected ? 'white' : 'rgba(0,0,0,0.3)'}
 		stroke-width={isSelected ? 3 : 1}
+		style={isShaded ? 'opacity: 0.5; filter: saturate(0.3);' : ''}
 		class="cursor-move touch-none transition-all hover:stroke-white hover:stroke-2"
 		onpointerdown={handlePointerDown}
 		onpointermove={handlePointerMove}

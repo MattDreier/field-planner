@@ -5,31 +5,33 @@
 	interface Props {
 		flower: FlowerData;
 		onDragStart: (e: DragEvent) => void;
+		onClick?: () => void;
 	}
 
-	let { flower, onDragStart }: Props = $props();
+	let { flower, onDragStart, onClick }: Props = $props();
 </script>
 
 <div
-	class="p-3 border border-border rounded-lg bg-card hover:bg-accent cursor-grab active:cursor-grabbing transition-colors"
+	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all"
 	draggable="true"
 	ondragstart={onDragStart}
+	onclick={onClick}
+	onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 	role="button"
 	tabindex="0"
 >
-	<div class="flex items-center gap-2">
-		<!-- Color indicator based on typical height -->
-		<div
-			class="w-4 h-4 rounded-full flex-shrink-0"
-			style="background-color: hsl({240 - (flower.heightMax / 96) * 240}, 70%, 50%)"
-		></div>
-		<div class="flex-1 min-w-0">
-			<h4 class="font-medium text-sm truncate">{flower.name}</h4>
-			<p class="text-xs text-muted-foreground truncate">{flower.scientificName}</p>
+	<div class="flex items-start justify-between gap-2">
+		<div class="min-w-0">
+			<h4 class="font-medium text-sm leading-tight">{flower.name}</h4>
+			<p class="text-xs text-muted-foreground italic">{flower.scientificName}</p>
 		</div>
 	</div>
-	<div class="mt-2 flex gap-4 text-xs text-muted-foreground">
-		<span title="Spacing">📏 {flower.spacingMin}–{flower.spacingMax}"</span>
-		<span title="Height">📐 {formatHeight(flower.heightMin)}–{formatHeight(flower.heightMax)}</span>
+	<div class="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+		<span>
+			<span class="text-foreground/70">Spacing</span> {flower.spacingMin}–{flower.spacingMax}"
+		</span>
+		<span>
+			<span class="text-foreground/70">Height</span> {formatHeight(flower.heightMin)}–{formatHeight(flower.heightMax)}
+		</span>
 	</div>
 </div>

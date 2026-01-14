@@ -13,6 +13,7 @@ export interface BedBase {
 	widthFeet: number;
 	name?: string;
 	fillColor?: string;
+	rotation?: number; // degrees (0-360), clockwise from North
 	createdAt: number;
 }
 
@@ -60,6 +61,15 @@ export interface PlantWithPosition extends PlacedPlant {
 	absoluteY: number;
 	hasConflict: boolean;
 	heightColor: string;
+	isShaded?: boolean; // true if another plant's shadow covers this plant
+}
+
+// Sun simulation state
+export interface SunSimulationState {
+	enabled: boolean;
+	latitude: number; // -90 to 90
+	month: number; // 0-11 (continuous for smooth interpolation)
+	timeOfDay: number; // 0-1 (sunrise to sunset)
 }
 
 // Canvas state

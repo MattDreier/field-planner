@@ -13,6 +13,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@tailwindcss/typography": "^0.5.19",
+    "@types/suncalc": "^1.9.2",
     "autoprefixer": "^10.4.23",
     "bits-ui": "^2.15.4",
     "clsx": "^2.1.1",
@@ -28,6 +29,7 @@
   "type": "module",
   "dependencies": {
     "convex": "^1.31.4",
-    "convex-svelte": "^0.0.12"
+    "convex-svelte": "^0.0.12",
+    "suncalc": "^1.9.0"
   }
 }

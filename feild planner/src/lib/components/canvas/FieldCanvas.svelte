@@ -2,12 +2,16 @@
 	import GridBackground from './GridBackground.svelte';
 	import Bed from './Bed.svelte';
 	import PlacedPlant from './PlacedPlant.svelte';
-	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Tool, DragSource } from '$lib/types';
+	import ShadowLayer from './ShadowLayer.svelte';
+	import CompassRose from './CompassRose.svelte';
+	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Tool, DragSource, SunSimulationState } from '$lib/types';
 	import { getBedDimensionsInInches } from '$lib/types';
 	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
 	import { calculateHeightColors } from '$lib/utils/color';
 	import { snapToGrid, snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
+	import { calculateSunPosition } from '$lib/utils/sun';
+	import { calculateAllShadows, detectShadedPlants } from '$lib/utils/shadow';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
 	interface Props {
@@ -24,11 +28,13 @@
 		selectedPlantId: Id<'placedPlants'> | null;
 		dragSource: DragSource;
 		snapIncrement: SnapIncrement;
+		sunSimulation: SunSimulationState;
 		onSelectBed: (id: Id<'beds'> | null) => void;
 		onSelectPlant: (id: Id<'placedPlants'> | null) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
 		onMoveBed: (id: Id<'beds'>, newX: number, newY: number) => void;
 		onResizeBed: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
+		onRotateBed: (id: Id<'beds'>, rotation: number) => void;
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
 	}
@@ -47,11 +53,13 @@
 		selectedPlantId,
 		dragSource,
 		snapIncrement,
+		sunSimulation,
 		onSelectBed,
 		onSelectPlant,
 		onCreateBed,
 		onMoveBed,
 		onResizeBed,
+		onRotateBed,
 		onPlacePlant,
 		onMovePlant
 	}: Props = $props();
@@ -99,6 +107,40 @@
 	const heightColors = $derived.by(() => {
 		const plantHeights = plants.map((p) => ({ id: p._id, heightMax: p.heightMax }));
 		return calculateHeightColors(plantHeights);
+	});
+
+	// Calculate sun position and shadows
+	const sunPosition = $derived.by(() => {
+		if (!sunSimulation.enabled) return null;
+		return calculateSunPosition(
+			sunSimulation.latitude,
+			sunSimulation.month,
+			sunSimulation.timeOfDay
+		);
+	});
+
+	// Calculate shadows for all plants
+	const shadows = $derived.by(() => {
+		if (!sunPosition || sunPosition.isNight) return [];
+		const plantsForShadow = plantsWithPositions.map((p) => ({
+			id: p._id,
+			x: p.absoluteX,
+			y: p.absoluteY,
+			heightMax: p.heightMax
+		}));
+		return calculateAllShadows(plantsForShadow, sunPosition);
+	});
+
+	// Detect which plants are being shaded
+	const shadedPlants = $derived.by(() => {
+		if (!sunPosition || sunPosition.isNight) return new Set<string>();
+		const plantsForShadow = plantsWithPositions.map((p) => ({
+			id: p._id,
+			x: p.absoluteX,
+			y: p.absoluteY,
+			heightMax: p.heightMax
+		}));
+		return detectShadedPlants(plantsForShadow, sunPosition);
 	});
 
 	// Bed creation drag state
@@ -265,6 +307,16 @@
 		{zoom}
 	/>
 
+	<!-- Shadow layer (below beds) -->
+	{#if sunSimulation.enabled && shadows.length > 0}
+		<ShadowLayer {shadows} {canvasState} />
+	{/if}
+
+	<!-- Compass rose (fixed position) -->
+	{#if sunSimulation.enabled}
+		<CompassRose x={50} y={50} size={60} />
+	{/if}
+
 	<!-- Beds -->
 	{#each beds as bed (bed._id)}
 		{@const canvasPos = fieldToCanvas(bed.x, bed.y, canvasState)}
@@ -284,6 +336,7 @@
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
 			onResize={onResizeBed}
+			onRotate={onRotateBed}
 		/>
 	{/each}
 
@@ -296,6 +349,7 @@
 			spacingRadiusPixels={plant.spacingRadiusPixels}
 			heightColor={heightColors.get(plant._id) ?? 'hsl(120, 70%, 50%)'}
 			hasConflict={conflicts.has(plant._id)}
+			isShaded={shadedPlants.has(plant._id)}
 			isSelected={selectedPlantId === plant._id}
 			onSelect={onSelectPlant}
 			onMove={handlePlantMove}

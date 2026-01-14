@@ -2,12 +2,14 @@
 	import FieldCanvas from '$lib/components/canvas/FieldCanvas.svelte';
 	import PlantPalette from '$lib/components/sidebar/PlantPalette.svelte';
 	import BedTools from '$lib/components/sidebar/BedTools.svelte';
+	import SunControls from '$lib/components/sidebar/SunControls.svelte';
+	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
 	import ZoomControls from '$lib/components/layout/ZoomControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import SnapControls from '$lib/components/layout/SnapControls.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, DragSource, Bed, PlacedPlant } from '$lib/types';
+	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus } from 'lucide-svelte';
 	import { history } from '$lib/stores/history.svelte';
@@ -27,10 +29,19 @@
 	let currentTool = $state<Tool>('select');
 	let selectedBedId = $state<Id<'beds'> | null>(null);
 	let selectedPlantId = $state<Id<'placedPlants'> | null>(null);
+	let viewingFlowerId = $state<string | null>(null); // For viewing flower details from palette
 	let dragSource = $state<DragSource>(null);
 
 	// Snapping state
 	let snapIncrement = $state<SnapIncrement>(0);
+
+	// Sun simulation state (default to zone 6b latitude ~40°N, current month)
+	let sunSimulation = $state<SunSimulationState>({
+		enabled: false,
+		latitude: 40,
+		month: new Date().getMonth(),
+		timeOfDay: 0.5 // noon
+	});
 
 	// Default canvas size (in inches - 20ft x 15ft)
 	const canvasWidth = 240; // 20 feet
@@ -84,9 +95,33 @@
 	}
 
 	function selectPlant(id: Id<'placedPlants'> | null) {
-		selectedPlantId = id;
+		// Toggle: clicking same plant again deselects it
+		if (id === selectedPlantId) {
+			selectedPlantId = null;
+		} else {
+			selectedPlantId = id;
+		}
+		selectedBedId = null;
+		viewingFlowerId = null; // Clear palette selection when selecting a placed plant
+	}
+
+	// Handle clicking a flower in the palette
+	function handleFlowerClick(flowerId: string) {
+		// Toggle: clicking same flower again closes panel
+		if (flowerId === viewingFlowerId) {
+			viewingFlowerId = null;
+		} else {
+			viewingFlowerId = flowerId;
+		}
+		selectedPlantId = null; // Clear placed plant selection
 		selectedBedId = null;
 	}
+
+	// Get the selected plant's flower ID for the details panel
+	const selectedPlant = $derived(plants.find((p) => p._id === selectedPlantId) ?? null);
+
+	// Determine which flower to show in details panel (placed plant takes priority)
+	const detailsFlowerId = $derived(selectedPlant?.flowerId ?? viewingFlowerId);
 
 	// Bed creation handler
 	function handleCreateBed(
@@ -133,6 +168,21 @@
 				? { ...b, widthFeet: newWidthFeet, ...(b.shape === 'rectangle' ? { heightFeet: newHeightFeet } : {}) }
 				: b
 		);
+	}
+
+	// Bed rotation handler
+	function handleRotateBed(id: Id<'beds'>, rotation: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
+		beds = beds.map((b) =>
+			b._id === id ? { ...b, rotation } : b
+		);
+	}
+
+	// Sun simulation update handler
+	function handleUpdateSunSimulation(update: Partial<SunSimulationState>) {
+		sunSimulation = { ...sunSimulation, ...update };
 	}
 
 	// Plant placement handler
@@ -295,11 +345,14 @@
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
+				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
 			/>
 
 			<div class="flex-1 overflow-hidden">
-				<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} />
+				<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
 			</div>
+
+			<SunControls {sunSimulation} onUpdate={handleUpdateSunSimulation} />
 
 			{#if plants.length > 0}
 				<HeightLegend minHeight={heightRange().min} maxHeight={heightRange().max} />
@@ -323,15 +376,28 @@
 					{selectedPlantId}
 					{dragSource}
 					{snapIncrement}
+					{sunSimulation}
 					onSelectBed={selectBed}
 					onSelectPlant={selectPlant}
 					onCreateBed={handleCreateBed}
 					onMoveBed={handleMoveBed}
 					onResizeBed={handleResizeBed}
+					onRotateBed={handleRotateBed}
 					onPlacePlant={handlePlacePlant}
 					onMovePlant={handleMovePlant}
 				/>
 			</div>
 		</main>
+
+		<!-- Plant details slide-out panel -->
+		{#if detailsFlowerId}
+			<PlantDetails
+				flowerId={detailsFlowerId}
+				onClose={() => {
+					selectedPlantId = null;
+					viewingFlowerId = null;
+				}}
+			/>
+		{/if}
 	</div>
 </div>

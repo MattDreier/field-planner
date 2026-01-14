@@ -6,9 +6,10 @@
 	interface Props {
 		onDragStart: (source: DragSource) => void;
 		onDragEnd: () => void;
+		onFlowerClick?: (flowerId: string) => void;
 	}
 
-	let { onDragStart, onDragEnd }: Props = $props();
+	let { onDragStart, onDragEnd, onFlowerClick }: Props = $props();
 
 	let searchQuery = $state('');
 
@@ -57,6 +58,7 @@
 			<PlantCard
 				{flower}
 				onDragStart={(e) => handleDragStart(flower, e)}
+				onClick={() => onFlowerClick?.(flower.id)}
 			/>
 		{/each}
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import RotationHandle from './RotationHandle.svelte';
 	import type { Bed as BedType } from '$lib/types';
 	import type { Id } from '../../../convex/_generated/dataModel';
 	import { snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
@@ -16,9 +17,10 @@
 		onSelect: (id: Id<'beds'>) => void;
 		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number) => void;
 		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
+		onRotate?: (id: Id<'beds'>, rotation: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, onSelect, onMove, onResize }: Props = $props();
+	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, onSelect, onMove, onResize, onRotate }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
@@ -74,7 +76,7 @@
 		resizeStartX = e.clientX;
 		resizeStartY = e.clientY;
 		resizeStartWidthFeet = bed.widthFeet;
-		resizeStartHeightFeet = bed.heightFeet ?? bed.widthFeet;
+		resizeStartHeightFeet = bed.shape === 'rectangle' ? bed.heightFeet : bed.widthFeet;
 		(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 	}
 
@@ -119,9 +121,22 @@
 
 	// Resize handles (shown when selected)
 	const handleSize = 8;
+
+	// Rotation
+	const rotation = $derived(bed.rotation ?? 0);
+	const centerX = $derived(x + widthPixels / 2);
+	const centerY = $derived(y + heightPixels / 2);
+
+	function handleRotation(degrees: number) {
+		if (onRotate) {
+			onRotate(bed._id, degrees);
+		}
+	}
 </script>
 
 <g class="bed" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id)}>
+	<!-- Rotation wrapper - all bed content rotates around center -->
+	<g transform="rotate({rotation}, {centerX}, {centerY})">
 	{#if bed.shape === 'rectangle'}
 		<!-- Rectangular bed -->
 		<rect
@@ -235,6 +250,18 @@
 			onpointerdown={(e) => handleResizePointerDown('s', e)}
 			onpointermove={handleResizePointerMove}
 			onpointerup={handleResizePointerUp}
+		/>
+	{/if}
+	</g><!-- End rotation wrapper -->
+
+	<!-- Rotation handle (shown when selected) - outside rotation wrapper -->
+	{#if isSelected && onRotate}
+		<RotationHandle
+			{centerX}
+			{centerY}
+			currentRotation={rotation}
+			distance={Math.max(widthPixels, heightPixels) / 2 + 30}
+			onRotate={handleRotation}
 		/>
 	{/if}
 </g>

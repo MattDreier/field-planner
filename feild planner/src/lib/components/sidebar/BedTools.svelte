@@ -12,19 +12,22 @@
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
+		onRotateBed?: (id: string, rotation: number) => void;
 	}
 
-	let { currentTool, hasSelection, selectedBed, snapIncrement, onToolChange, onDelete, onResizeBed }: Props = $props();
+	let { currentTool, hasSelection, selectedBed, snapIncrement, onToolChange, onDelete, onResizeBed, onRotateBed }: Props = $props();
 
 	// Local input values for controlled inputs
 	let widthInput = $state('');
 	let heightInput = $state('');
+	let rotationInput = $state('');
 
 	// Sync local inputs when selected bed changes
 	$effect(() => {
 		if (selectedBed) {
 			widthInput = selectedBed.widthFeet.toFixed(2);
 			heightInput = selectedBed.shape === 'rectangle' ? selectedBed.heightFeet.toFixed(2) : '';
+			rotationInput = (selectedBed.rotation ?? 0).toFixed(0);
 		}
 	});
 
@@ -44,6 +47,16 @@
 		if (!isNaN(value) && value >= 0.5 && selectedBed && selectedBed.shape === 'rectangle') {
 			const snappedValue = snapFeetToGrid(value, snapIncrement);
 			onResizeBed(selectedBed._id, selectedBed.widthFeet, snappedValue);
+		}
+	}
+
+	function handleRotationChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && selectedBed && onRotateBed) {
+			// Normalize to 0-360
+			const normalizedValue = ((value % 360) + 360) % 360;
+			onRotateBed(selectedBed._id, normalizedValue);
 		}
 	}
 </script>
@@ -135,6 +148,23 @@
 						/>
 					</div>
 				{/if}
+
+				<!-- Rotation input -->
+				<div>
+					<label for="bed-rotation" class="block text-xs text-muted-foreground mb-1">
+						Rotation (degrees)
+					</label>
+					<input
+						id="bed-rotation"
+						type="number"
+						min="0"
+						max="360"
+						step="1"
+						bind:value={rotationInput}
+						onchange={handleRotationChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+				</div>
 			</div>
 		</div>
 	{/if}
