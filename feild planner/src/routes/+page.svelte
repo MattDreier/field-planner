@@ -2,11 +2,10 @@
 	import FieldCanvas from '$lib/components/canvas/FieldCanvas.svelte';
 	import PlantPalette from '$lib/components/sidebar/PlantPalette.svelte';
 	import BedTools from '$lib/components/sidebar/BedTools.svelte';
-	import SunControls from '$lib/components/sidebar/SunControls.svelte';
 	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
-	import ZoomControls from '$lib/components/layout/ZoomControls.svelte';
 	import MapControls from '$lib/components/layout/MapControls.svelte';
+	import CanvasSunControls from '$lib/components/canvas/CanvasSunControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import SnapControls from '$lib/components/layout/SnapControls.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -522,8 +521,6 @@
 				<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
 			</div>
 
-			<SunControls {sunSimulation} onUpdate={handleUpdateSunSimulation} />
-
 			{#if plants.length > 0}
 				<HeightLegend minHeight={heightRange().min} maxHeight={heightRange().max} />
 			{/if}
@@ -555,7 +552,8 @@
 				onPan={handlePan}
 				onZoom={handleZoomWithPivot}
 			/>
-			<!-- Google Maps style controls overlay -->
+			<!-- Canvas overlay controls -->
+			<CanvasSunControls {sunSimulation} onUpdate={handleUpdateSunSimulation} />
 			<MapControls
 				{zoom}
 				onZoomIn={zoomIn}
