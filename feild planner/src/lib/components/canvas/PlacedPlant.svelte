@@ -12,7 +12,7 @@
 		hasConflict: boolean;
 		isShaded?: boolean;
 		isSelected: boolean;
-		onSelect: (id: Id<'placedPlants'>) => void;
+		onSelect: (id: Id<'placedPlants'>, shiftKey?: boolean) => void;
 		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number) => void;
 	}
 
@@ -28,7 +28,7 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
-		onSelect(plant._id);
+		onSelect(plant._id, e.shiftKey);
 		isDragging = true;
 		dragStartX = e.clientX;
 		dragStartY = e.clientY;
@@ -52,7 +52,7 @@
 	}
 </script>
 
-<g class="placed-plant" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id)}>
+<g class="placed-plant" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id, e.shiftKey)}>
 	<!-- Spacing circle (semi-transparent, turns grey when shaded) -->
 	<SpacingCircle
 		{cx}

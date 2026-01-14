@@ -24,13 +24,13 @@
 		tool: Tool;
 		beds: BedType[];
 		plants: PlacedPlantType[];
-		selectedBedId: Id<'beds'> | null;
-		selectedPlantId: Id<'placedPlants'> | null;
+		selectedBedIds: Set<Id<'beds'>>;
+		selectedPlantIds: Set<Id<'placedPlants'>>;
 		dragSource: DragSource;
 		snapIncrement: SnapIncrement;
 		sunSimulation: SunSimulationState;
-		onSelectBed: (id: Id<'beds'> | null) => void;
-		onSelectPlant: (id: Id<'placedPlants'> | null) => void;
+		onSelectBed: (id: Id<'beds'> | null, shiftKey?: boolean) => void;
+		onSelectPlant: (id: Id<'placedPlants'> | null, shiftKey?: boolean) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
 		onMoveBed: (id: Id<'beds'>, newX: number, newY: number) => void;
 		onResizeBed: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
@@ -49,8 +49,8 @@
 		tool,
 		beds,
 		plants,
-		selectedBedId,
-		selectedPlantId,
+		selectedBedIds,
+		selectedPlantIds,
 		dragSource,
 		snapIncrement,
 		sunSimulation,
@@ -332,7 +332,7 @@
 			{pixelsPerInch}
 			{zoom}
 			{snapIncrement}
-			isSelected={selectedBedId === bed._id}
+			isSelected={selectedBedIds.has(bed._id)}
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
 			onResize={onResizeBed}
@@ -350,7 +350,7 @@
 			heightColor={heightColors.get(plant._id) ?? 'hsl(120, 70%, 50%)'}
 			hasConflict={conflicts.has(plant._id)}
 			isShaded={shadedPlants.has(plant._id)}
-			isSelected={selectedPlantId === plant._id}
+			isSelected={selectedPlantIds.has(plant._id)}
 			onSelect={onSelectPlant}
 			onMove={handlePlantMove}
 		/>

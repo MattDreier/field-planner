@@ -27,10 +27,22 @@
 
 	// Selection and tool state
 	let currentTool = $state<Tool>('select');
-	let selectedBedId = $state<Id<'beds'> | null>(null);
-	let selectedPlantId = $state<Id<'placedPlants'> | null>(null);
+	let selectedBedIds = $state<Set<Id<'beds'>>>(new Set());
+	let selectedPlantIds = $state<Set<Id<'placedPlants'>>>(new Set());
 	let viewingFlowerId = $state<string | null>(null); // For viewing flower details from palette
 	let dragSource = $state<DragSource>(null);
+
+	// Clipboard for copy/paste
+	interface ClipboardData {
+		beds: Bed[];
+		plants: PlacedPlant[];
+	}
+	let clipboard = $state<ClipboardData | null>(null);
+	const PASTE_OFFSET_INCHES = 24; // 2 feet offset when pasting
+
+	// Derived: backwards-compatible single selection (for components that need it)
+	const selectedBedId = $derived(selectedBedIds.size === 1 ? [...selectedBedIds][0] : null);
+	const selectedPlantId = $derived(selectedPlantIds.size === 1 ? [...selectedPlantIds][0] : null);
 
 	// Snapping state
 	let snapIncrement = $state<SnapIncrement>(0);
@@ -51,8 +63,10 @@
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
 
-	// Derived: get the currently selected bed (must be after beds declaration)
-	const selectedBed = $derived(beds.find((b) => b._id === selectedBedId) ?? null);
+	// Derived: get the currently selected bed (for single-selection UI like resize panel)
+	const selectedBed = $derived(
+		selectedBedIds.size === 1 ? beds.find((b) => selectedBedIds.has(b._id)) ?? null : null
+	);
 
 	// Calculate height range for legend
 	const heightRange = $derived(() => {
@@ -64,8 +78,8 @@
 	// Tool actions
 	function setTool(tool: Tool) {
 		currentTool = tool;
-		selectedBedId = null;
-		selectedPlantId = null;
+		selectedBedIds = new Set();
+		selectedPlantIds = new Set();
 	}
 
 	// Zoom actions
@@ -88,20 +102,59 @@
 		snapIncrement = increment;
 	}
 
-	// Selection handlers
-	function selectBed(id: Id<'beds'> | null) {
-		selectedBedId = id;
-		selectedPlantId = null;
+	// Selection handlers with multi-selection support
+	function selectBed(id: Id<'beds'> | null, shiftKey = false) {
+		if (id === null) {
+			// Clicked empty space - clear all
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+			return;
+		}
+
+		if (shiftKey) {
+			// Shift+click: toggle in selection
+			const newSet = new Set(selectedBedIds);
+			if (newSet.has(id)) {
+				newSet.delete(id);
+			} else {
+				newSet.add(id);
+			}
+			selectedBedIds = newSet;
+		} else {
+			// Regular click: single selection (toggle if same)
+			if (selectedBedIds.size === 1 && selectedBedIds.has(id)) {
+				selectedBedIds = new Set();
+			} else {
+				selectedBedIds = new Set([id]);
+			}
+			selectedPlantIds = new Set();
+		}
 	}
 
-	function selectPlant(id: Id<'placedPlants'> | null) {
-		// Toggle: clicking same plant again deselects it
-		if (id === selectedPlantId) {
-			selectedPlantId = null;
-		} else {
-			selectedPlantId = id;
+	function selectPlant(id: Id<'placedPlants'> | null, shiftKey = false) {
+		if (id === null) {
+			selectedPlantIds = new Set();
+			return;
 		}
-		selectedBedId = null;
+
+		if (shiftKey) {
+			// Shift+click: toggle in selection
+			const newSet = new Set(selectedPlantIds);
+			if (newSet.has(id)) {
+				newSet.delete(id);
+			} else {
+				newSet.add(id);
+			}
+			selectedPlantIds = newSet;
+		} else {
+			// Regular click: single selection (toggle if same)
+			if (selectedPlantIds.size === 1 && selectedPlantIds.has(id)) {
+				selectedPlantIds = new Set();
+			} else {
+				selectedPlantIds = new Set([id]);
+			}
+			selectedBedIds = new Set();
+		}
 		viewingFlowerId = null; // Clear palette selection when selecting a placed plant
 	}
 
@@ -113,12 +166,14 @@
 		} else {
 			viewingFlowerId = flowerId;
 		}
-		selectedPlantId = null; // Clear placed plant selection
-		selectedBedId = null;
+		selectedPlantIds = new Set(); // Clear placed plant selection
+		selectedBedIds = new Set();
 	}
 
-	// Get the selected plant's flower ID for the details panel
-	const selectedPlant = $derived(plants.find((p) => p._id === selectedPlantId) ?? null);
+	// Get the selected plant's flower ID for the details panel (single selection only)
+	const selectedPlant = $derived(
+		selectedPlantIds.size === 1 ? plants.find((p) => selectedPlantIds.has(p._id)) ?? null : null
+	);
 
 	// Determine which flower to show in details panel (placed plant takes priority)
 	const detailsFlowerId = $derived(selectedPlant?.flowerId ?? viewingFlowerId);
@@ -223,22 +278,25 @@
 		);
 	}
 
-	// Delete handler
+	// Delete handler - supports multi-selection
 	function handleDelete() {
-		if (selectedPlantId) {
+		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0) {
 			// Save state before mutation
 			history.push(beds, plants);
 
-			plants = plants.filter((p) => p._id !== selectedPlantId);
-			selectedPlantId = null;
-		} else if (selectedBedId) {
-			// Save state before mutation
-			history.push(beds, plants);
+			// Delete selected plants
+			if (selectedPlantIds.size > 0) {
+				plants = plants.filter((p) => !selectedPlantIds.has(p._id));
+			}
 
-			// Remove bed and its plants
-			plants = plants.filter((p) => p.bedId !== selectedBedId);
-			beds = beds.filter((b) => b._id !== selectedBedId);
-			selectedBedId = null;
+			// Delete selected beds and their plants
+			if (selectedBedIds.size > 0) {
+				plants = plants.filter((p) => !selectedBedIds.has(p.bedId));
+				beds = beds.filter((b) => !selectedBedIds.has(b._id));
+			}
+
+			selectedPlantIds = new Set();
+			selectedBedIds = new Set();
 		}
 	}
 
@@ -249,6 +307,87 @@
 
 	function handleDragEnd() {
 		dragSource = null;
+	}
+
+	// Copy/Paste/Select All handlers
+	function handleCopy() {
+		if (selectedBedIds.size === 0 && selectedPlantIds.size === 0) return;
+
+		const copiedBeds = beds.filter((b) => selectedBedIds.has(b._id));
+		const copiedPlants = plants.filter((p) => selectedPlantIds.has(p._id));
+
+		clipboard = { beds: copiedBeds, plants: copiedPlants };
+	}
+
+	function handlePaste() {
+		if (!clipboard || (clipboard.beds.length === 0 && clipboard.plants.length === 0)) return;
+
+		history.push(beds, plants);
+
+		// Map old bed IDs to new bed IDs (for reassigning plants to copied beds)
+		const bedIdMap = new Map<Id<'beds'>, Id<'beds'>>();
+		const newBedIds = new Set<Id<'beds'>>();
+		const newPlantIds = new Set<Id<'placedPlants'>>();
+
+		// Paste beds with offset
+		clipboard.beds.forEach((bed) => {
+			const newId = `bed-${Date.now()}-${Math.random().toString(36).slice(2)}` as Id<'beds'>;
+			bedIdMap.set(bed._id, newId);
+
+			const newBed = {
+				...bed,
+				_id: newId,
+				x: bed.x + PASTE_OFFSET_INCHES,
+				y: bed.y + PASTE_OFFSET_INCHES,
+				createdAt: Date.now()
+			} as Bed;
+			beds = [...beds, newBed];
+			newBedIds.add(newId);
+		});
+
+		// Paste plants
+		clipboard.plants.forEach((plant) => {
+			const newId = `plant-${Date.now()}-${Math.random().toString(36).slice(2)}` as Id<'placedPlants'>;
+
+			// Determine target bed:
+			// - If plant's original bed was also copied, use the new bed
+			// - Else if a single different bed is selected, paste there
+			// - Else use original bed
+			let targetBedId = plant.bedId;
+			let shouldOffset = true;
+
+			if (bedIdMap.has(plant.bedId)) {
+				// Plant's bed was copied - put plant in the new bed
+				targetBedId = bedIdMap.get(plant.bedId)!;
+			} else if (selectedBedIds.size === 1) {
+				// A single bed is selected - paste plant there
+				const selectedBed = [...selectedBedIds][0];
+				if (selectedBed !== plant.bedId) {
+					targetBedId = selectedBed;
+					shouldOffset = false; // Don't offset when pasting to different bed
+				}
+			}
+
+			const newPlant: PlacedPlant = {
+				...plant,
+				_id: newId,
+				bedId: targetBedId,
+				x: shouldOffset ? plant.x + PASTE_OFFSET_INCHES : plant.x,
+				y: shouldOffset ? plant.y + PASTE_OFFSET_INCHES : plant.y,
+				createdAt: Date.now()
+			};
+			plants = [...plants, newPlant];
+			newPlantIds.add(newId);
+		});
+
+		// Select newly pasted items
+		selectedBedIds = newBedIds;
+		selectedPlantIds = newPlantIds;
+	}
+
+	function handleSelectAll() {
+		selectedBedIds = new Set(beds.map((b) => b._id));
+		selectedPlantIds = new Set(plants.map((p) => p._id));
 	}
 
 	// Keyboard shortcuts
@@ -262,15 +401,33 @@
 		const modKey = isMac ? e.metaKey : e.ctrlKey;
 
 		if (e.key === 'Delete' || e.key === 'Backspace') {
-			// Delete selected item
+			// Delete selected items
 			e.preventDefault();
 			handleDelete();
 		}
 
 		if (e.key === 'Escape') {
 			// Clear selection
-			selectedBedId = null;
-			selectedPlantId = null;
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+		}
+
+		// Copy: Cmd/Ctrl+C
+		if (modKey && e.key === 'c') {
+			e.preventDefault();
+			handleCopy();
+		}
+
+		// Paste: Cmd/Ctrl+V
+		if (modKey && e.key === 'v') {
+			e.preventDefault();
+			handlePaste();
+		}
+
+		// Select All: Cmd/Ctrl+A
+		if (modKey && e.key === 'a') {
+			e.preventDefault();
+			handleSelectAll();
 		}
 
 		if (modKey && e.key === 'z') {
@@ -281,8 +438,8 @@
 				if (snapshot) {
 					beds = snapshot.beds;
 					plants = snapshot.plants;
-					selectedBedId = null;
-					selectedPlantId = null;
+					selectedBedIds = new Set();
+					selectedPlantIds = new Set();
 				}
 			} else {
 				// Undo: Cmd/Ctrl+Z
@@ -290,8 +447,8 @@
 				if (snapshot) {
 					beds = snapshot.beds;
 					plants = snapshot.plants;
-					selectedBedId = null;
-					selectedPlantId = null;
+					selectedBedIds = new Set();
+					selectedPlantIds = new Set();
 				}
 			}
 		}
@@ -303,8 +460,8 @@
 			if (snapshot) {
 				beds = snapshot.beds;
 				plants = snapshot.plants;
-				selectedBedId = null;
-				selectedPlantId = null;
+				selectedBedIds = new Set();
+				selectedPlantIds = new Set();
 			}
 		}
 	}
@@ -372,8 +529,8 @@
 					tool={currentTool}
 					{beds}
 					{plants}
-					{selectedBedId}
-					{selectedPlantId}
+					{selectedBedIds}
+					{selectedPlantIds}
 					{dragSource}
 					{snapIncrement}
 					{sunSimulation}
@@ -394,7 +551,7 @@
 			<PlantDetails
 				flowerId={detailsFlowerId}
 				onClose={() => {
-					selectedPlantId = null;
+					selectedPlantIds = new Set();
 					viewingFlowerId = null;
 				}}
 			/>

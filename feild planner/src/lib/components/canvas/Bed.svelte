@@ -14,7 +14,7 @@
 		zoom: number;
 		snapIncrement: SnapIncrement;
 		isSelected: boolean;
-		onSelect: (id: Id<'beds'>) => void;
+		onSelect: (id: Id<'beds'>, shiftKey?: boolean) => void;
 		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number) => void;
 		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 		onRotate?: (id: Id<'beds'>, rotation: number) => void;
@@ -45,7 +45,7 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return; // Only primary button
-		onSelect(bed._id);
+		onSelect(bed._id, e.shiftKey);
 		isDragging = true;
 		dragStartX = e.clientX;
 		dragStartY = e.clientY;
@@ -134,7 +134,7 @@
 	}
 </script>
 
-<g class="bed" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id)}>
+<g class="bed" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id, e.shiftKey)}>
 	<!-- Rotation wrapper - all bed content rotates around center -->
 	<g transform="rotate({rotation}, {centerX}, {centerY})">
 	{#if bed.shape === 'rectangle'}
