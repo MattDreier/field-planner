@@ -555,7 +555,6 @@
 			<!-- Canvas overlay controls -->
 			<CanvasSunControls {sunSimulation} onUpdate={handleUpdateSunSimulation} />
 			<MapControls
-				{zoom}
 				onZoomIn={zoomIn}
 				onZoomOut={zoomOut}
 				onReset={resetZoom}
