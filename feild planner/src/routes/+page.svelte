@@ -6,6 +6,7 @@
 	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
 	import ZoomControls from '$lib/components/layout/ZoomControls.svelte';
+	import MapControls from '$lib/components/layout/MapControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import SnapControls from '$lib/components/layout/SnapControls.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -55,10 +56,6 @@
 		timeOfDay: 0.5 // noon
 	});
 
-	// Default canvas size (in inches - 20ft x 15ft)
-	const canvasWidth = 240; // 20 feet
-	const canvasHeight = 180; // 15 feet
-
 	// Local state for beds and plants
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
@@ -88,13 +85,30 @@
 	}
 
 	function zoomOut() {
-		zoom = Math.max(0.25, zoom / 1.2);
+		zoom = Math.max(0.1, zoom / 1.2);
 	}
 
 	function resetZoom() {
 		zoom = 1.0;
 		panX = 0;
 		panY = 0;
+	}
+
+	// Zoom with pivot point (used by wheel zoom)
+	function handleZoomWithPivot(newZoom: number, pivotFieldX: number, pivotFieldY: number) {
+		// Keep the pivot point fixed on screen while zooming
+		const newPanX = panX + pivotFieldX * pixelsPerInch * (zoom - newZoom);
+		const newPanY = panY + pivotFieldY * pixelsPerInch * (zoom - newZoom);
+
+		zoom = newZoom;
+		panX = newPanX;
+		panY = newPanY;
+	}
+
+	// Pan handler
+	function handlePan(deltaX: number, deltaY: number) {
+		panX = panX + deltaX;
+		panY = panY + deltaY;
 	}
 
 	// Snap actions
@@ -486,7 +500,6 @@
 				{plants}
 			/>
 			<SnapControls {snapIncrement} onSnapChange={setSnapIncrement} />
-			<ZoomControls {zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
 		</div>
 	</header>
 
@@ -516,34 +529,40 @@
 			{/if}
 		</aside>
 
-		<!-- Canvas area -->
-		<main class="flex-1 overflow-auto p-6 bg-muted/30">
-			<div class="inline-block">
-				<FieldCanvas
-					{canvasWidth}
-					{canvasHeight}
-					{pixelsPerInch}
-					{zoom}
-					{panX}
-					{panY}
-					tool={currentTool}
-					{beds}
-					{plants}
-					{selectedBedIds}
-					{selectedPlantIds}
-					{dragSource}
-					{snapIncrement}
-					{sunSimulation}
-					onSelectBed={selectBed}
-					onSelectPlant={selectPlant}
-					onCreateBed={handleCreateBed}
-					onMoveBed={handleMoveBed}
-					onResizeBed={handleResizeBed}
-					onRotateBed={handleRotateBed}
-					onPlacePlant={handlePlacePlant}
-					onMovePlant={handleMovePlant}
-				/>
-			</div>
+		<!-- Canvas area (infinite canvas fills available space) -->
+		<main class="flex-1 overflow-hidden bg-muted/30 relative">
+			<FieldCanvas
+				{pixelsPerInch}
+				{zoom}
+				{panX}
+				{panY}
+				tool={currentTool}
+				{beds}
+				{plants}
+				{selectedBedIds}
+				{selectedPlantIds}
+				{dragSource}
+				{snapIncrement}
+				{sunSimulation}
+				onSelectBed={selectBed}
+				onSelectPlant={selectPlant}
+				onCreateBed={handleCreateBed}
+				onMoveBed={handleMoveBed}
+				onResizeBed={handleResizeBed}
+				onRotateBed={handleRotateBed}
+				onPlacePlant={handlePlacePlant}
+				onMovePlant={handleMovePlant}
+				onPan={handlePan}
+				onZoom={handleZoomWithPivot}
+			/>
+			<!-- Google Maps style controls overlay -->
+			<MapControls
+				{zoom}
+				onZoomIn={zoomIn}
+				onZoomOut={zoomOut}
+				onReset={resetZoom}
+				showCompass={sunSimulation.enabled}
+			/>
 		</main>
 
 		<!-- Plant details slide-out panel -->

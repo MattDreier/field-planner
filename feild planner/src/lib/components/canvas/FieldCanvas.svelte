@@ -3,7 +3,6 @@
 	import Bed from './Bed.svelte';
 	import PlacedPlant from './PlacedPlant.svelte';
 	import ShadowLayer from './ShadowLayer.svelte';
-	import CompassRose from './CompassRose.svelte';
 	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Tool, DragSource, SunSimulationState } from '$lib/types';
 	import { getBedDimensionsInInches } from '$lib/types';
 	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
@@ -15,8 +14,6 @@
 	import type { Id } from '../../../convex/_generated/dataModel';
 
 	interface Props {
-		canvasWidth: number; // in inches
-		canvasHeight: number; // in inches
 		pixelsPerInch: number;
 		zoom: number;
 		panX: number;
@@ -37,11 +34,11 @@
 		onRotateBed: (id: Id<'beds'>, rotation: number) => void;
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
+		onPan: (deltaX: number, deltaY: number) => void;
+		onZoom: (newZoom: number, pivotX: number, pivotY: number) => void;
 	}
 
 	let {
-		canvasWidth,
-		canvasHeight,
 		pixelsPerInch,
 		zoom,
 		panX,
@@ -61,15 +58,60 @@
 		onResizeBed,
 		onRotateBed,
 		onPlacePlant,
-		onMovePlant
+		onMovePlant,
+		onPan,
+		onZoom
 	}: Props = $props();
 
-	// Canvas dimensions in pixels
-	const canvasWidthPx = $derived(canvasWidth * pixelsPerInch * zoom);
-	const canvasHeightPx = $derived(canvasHeight * pixelsPerInch * zoom);
+	// SVG element reference for size tracking
+	let svgElement = $state<SVGSVGElement | null>(null);
+	let viewportWidth = $state(800);
+	let viewportHeight = $state(600);
+
+	// Track viewport size with ResizeObserver
+	$effect(() => {
+		if (!svgElement) return;
+
+		const resizeObserver = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				viewportWidth = entry.contentRect.width;
+				viewportHeight = entry.contentRect.height;
+			}
+		});
+
+		resizeObserver.observe(svgElement);
+		return () => resizeObserver.disconnect();
+	});
 
 	// Canvas state helper
 	const canvasState = $derived({ zoom, panX, panY, pixelsPerInch });
+
+	// Panning state
+	let isPanning = $state(false);
+	let panStartX = $state(0);
+	let panStartY = $state(0);
+
+	// Handle wheel zoom (zoom toward cursor)
+	function handleWheel(e: WheelEvent) {
+		e.preventDefault();
+
+		const rect = svgElement?.getBoundingClientRect();
+		if (!rect) return;
+
+		// Get mouse position relative to viewport
+		const mouseX = e.clientX - rect.left;
+		const mouseY = e.clientY - rect.top;
+
+		// Zoom factor (invert for natural scrolling feel)
+		const delta = e.deltaY > 0 ? 0.9 : 1.1;
+		const newZoom = Math.min(4, Math.max(0.1, zoom * delta));
+
+		// Pivot point in field coordinates (before zoom)
+		const pivotFieldX = (mouseX - panX) / (pixelsPerInch * zoom);
+		const pivotFieldY = (mouseY - panY) / (pixelsPerInch * zoom);
+
+		onZoom(newZoom, pivotFieldX, pivotFieldY);
+	}
 
 	// Compute plant positions with absolute coordinates
 	const plantsWithPositions = $derived.by(() => {
@@ -153,8 +195,12 @@
 	function handleCanvasPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
 
-		// Clear selection when clicking on empty canvas
+		// Start panning when clicking on empty canvas in select mode
 		if (tool === 'select') {
+			isPanning = true;
+			panStartX = e.clientX;
+			panStartY = e.clientY;
+			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 			onSelectBed(null);
 			onSelectPlant(null);
 			return;
@@ -175,6 +221,17 @@
 	}
 
 	function handleCanvasPointerMove(e: PointerEvent) {
+		// Handle panning
+		if (isPanning) {
+			const deltaX = e.clientX - panStartX;
+			const deltaY = e.clientY - panStartY;
+			panStartX = e.clientX;
+			panStartY = e.clientY;
+			onPan(deltaX, deltaY);
+			return;
+		}
+
+		// Handle bed creation
 		if (!isCreatingBed) return;
 		const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
 		bedCurrentX = e.clientX - rect.left;
@@ -182,6 +239,14 @@
 	}
 
 	function handleCanvasPointerUp(e: PointerEvent) {
+		// End panning
+		if (isPanning) {
+			isPanning = false;
+			(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+			return;
+		}
+
+		// End bed creation
 		if (!isCreatingBed) return;
 		isCreatingBed = false;
 		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
@@ -288,33 +353,31 @@
 </script>
 
 <svg
-	width={canvasWidthPx}
-	height={canvasHeightPx}
-	class="border border-border rounded-lg shadow-inner touch-none"
+	bind:this={svgElement}
+	class="w-full h-full border border-border rounded-lg shadow-inner touch-none"
+	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'};"
 	onpointerdown={handleCanvasPointerDown}
 	onpointermove={handleCanvasPointerMove}
 	onpointerup={handleCanvasPointerUp}
+	onwheel={handleWheel}
 	ondrop={handleDrop}
 	ondragover={handleDragOver}
 	role="application"
 	aria-label="Garden field planner canvas"
 >
-	<!-- Grid background -->
+	<!-- Grid background (fills viewport, offset by pan) -->
 	<GridBackground
-		width={canvasWidthPx}
-		height={canvasHeightPx}
+		width={viewportWidth}
+		height={viewportHeight}
 		{pixelsPerInch}
 		{zoom}
+		{panX}
+		{panY}
 	/>
 
 	<!-- Shadow layer (below beds) -->
 	{#if sunSimulation.enabled && shadows.length > 0}
 		<ShadowLayer {shadows} {canvasState} />
-	{/if}
-
-	<!-- Compass rose (fixed position) -->
-	{#if sunSimulation.enabled}
-		<CompassRose x={50} y={50} size={60} />
 	{/if}
 
 	<!-- Beds -->
