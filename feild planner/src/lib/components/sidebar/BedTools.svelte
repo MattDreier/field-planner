@@ -1,16 +1,51 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool } from '$lib/types';
+	import type { Tool, Bed } from '$lib/types';
 	import { MousePointer2, Square, Circle, Trash2 } from 'lucide-svelte';
+	import { snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
 
 	interface Props {
 		currentTool: Tool;
 		hasSelection: boolean;
+		selectedBed: Bed | null;
+		snapIncrement: SnapIncrement;
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
+		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 	}
 
-	let { currentTool, hasSelection, onToolChange, onDelete }: Props = $props();
+	let { currentTool, hasSelection, selectedBed, snapIncrement, onToolChange, onDelete, onResizeBed }: Props = $props();
+
+	// Local input values for controlled inputs
+	let widthInput = $state('');
+	let heightInput = $state('');
+
+	// Sync local inputs when selected bed changes
+	$effect(() => {
+		if (selectedBed) {
+			widthInput = selectedBed.widthFeet.toFixed(2);
+			heightInput = selectedBed.shape === 'rectangle' ? selectedBed.heightFeet.toFixed(2) : '';
+		}
+	});
+
+	function handleWidthChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0.5 && selectedBed) {
+			const snappedValue = snapFeetToGrid(value, snapIncrement);
+			const height = selectedBed.shape === 'rectangle' ? selectedBed.heightFeet : undefined;
+			onResizeBed(selectedBed._id, snappedValue, height);
+		}
+	}
+
+	function handleHeightChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0.5 && selectedBed && selectedBed.shape === 'rectangle') {
+			const snappedValue = snapFeetToGrid(value, snapIncrement);
+			onResizeBed(selectedBed._id, selectedBed.widthFeet, snappedValue);
+		}
+	}
 </script>
 
 <div class="p-4 border-b border-border">
@@ -59,6 +94,48 @@
 				<Trash2 class="w-4 h-4" />
 				Delete Selected
 			</Button>
+		</div>
+	{/if}
+
+	{#if selectedBed}
+		<div class="mt-4 pt-4 border-t border-border">
+			<h4 class="font-medium text-sm mb-3">
+				{selectedBed.shape === 'circle' ? 'Circular Bed' : 'Rectangular Bed'}
+			</h4>
+
+			<div class="space-y-3">
+				<div>
+					<label for="bed-width" class="block text-xs text-muted-foreground mb-1">
+						{selectedBed.shape === 'circle' ? 'Diameter (ft)' : 'Width (ft)'}
+					</label>
+					<input
+						id="bed-width"
+						type="number"
+						min="0.5"
+						step="0.5"
+						bind:value={widthInput}
+						onchange={handleWidthChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+				</div>
+
+				{#if selectedBed.shape === 'rectangle'}
+					<div>
+						<label for="bed-height" class="block text-xs text-muted-foreground mb-1">
+							Height (ft)
+						</label>
+						<input
+							id="bed-height"
+							type="number"
+							min="0.5"
+							step="0.5"
+							bind:value={heightInput}
+							onchange={handleHeightChange}
+							class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+						/>
+					</div>
+				{/if}
+			</div>
 		</div>
 	{/if}
 

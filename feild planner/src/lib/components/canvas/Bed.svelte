@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Bed as BedType } from '$lib/types';
 	import type { Id } from '../../../convex/_generated/dataModel';
+	import { snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
 
 	interface Props {
 		bed: BedType;
@@ -10,13 +11,14 @@
 		heightPixels: number;
 		pixelsPerInch: number;
 		zoom: number;
+		snapIncrement: SnapIncrement;
 		isSelected: boolean;
 		onSelect: (id: Id<'beds'>) => void;
 		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number) => void;
 		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, isSelected, onSelect, onMove, onResize }: Props = $props();
+	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, onSelect, onMove, onResize }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
@@ -102,6 +104,10 @@
 				newHeightFeet = Math.max(MIN_SIZE_FEET, resizeStartHeightFeet + deltaFeetY);
 				break;
 		}
+
+		// Apply snapping to dimensions
+		newWidthFeet = snapFeetToGrid(newWidthFeet, snapIncrement);
+		newHeightFeet = snapFeetToGrid(newHeightFeet, snapIncrement);
 
 		onResize(bed._id, newWidthFeet, newHeightFeet);
 	}

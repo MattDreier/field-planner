@@ -7,6 +7,7 @@
 	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
 	import { calculateHeightColors } from '$lib/utils/color';
+	import { snapToGrid, snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
 	interface Props {
@@ -22,6 +23,7 @@
 		selectedBedId: Id<'beds'> | null;
 		selectedPlantId: Id<'placedPlants'> | null;
 		dragSource: DragSource;
+		snapIncrement: SnapIncrement;
 		onSelectBed: (id: Id<'beds'> | null) => void;
 		onSelectPlant: (id: Id<'placedPlants'> | null) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
@@ -44,6 +46,7 @@
 		selectedBedId,
 		selectedPlantId,
 		dragSource,
+		snapIncrement,
 		onSelectBed,
 		onSelectPlant,
 		onCreateBed,
@@ -148,13 +151,21 @@
 		const height = Math.abs(bedCurrentY - bedStartY);
 
 		// Convert to field coordinates and feet
-		const fieldPos = canvasToField(minX, minY, canvasState);
+		let fieldPos = canvasToField(minX, minY, canvasState);
 		const widthInches = width / (pixelsPerInch * zoom);
 		const heightInches = height / (pixelsPerInch * zoom);
 
-		// Minimum bed size: 1 foot
-		const widthFeet = Math.max(1, Math.round(widthInches / 12));
-		const heightFeet = Math.max(1, Math.round(heightInches / 12));
+		// Apply snapping to position (in inches)
+		fieldPos = {
+			x: snapToGrid(fieldPos.x, snapIncrement),
+			y: snapToGrid(fieldPos.y, snapIncrement)
+		};
+
+		// Minimum bed size: 1 foot, with snapping applied
+		let widthFeet = Math.max(1, Math.round(widthInches / 12));
+		let heightFeet = Math.max(1, Math.round(heightInches / 12));
+		widthFeet = snapFeetToGrid(widthFeet, snapIncrement);
+		heightFeet = snapFeetToGrid(heightFeet, snapIncrement);
 
 		// Only create if dragged enough
 		if (widthFeet >= 1 && heightFeet >= 1) {
@@ -210,7 +221,27 @@
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
 		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
 
-		onMoveBed(id, bed.x + deltaInchesX, bed.y + deltaInchesY);
+		// Apply snapping to new position
+		const newX = snapToGrid(bed.x + deltaInchesX, snapIncrement);
+		const newY = snapToGrid(bed.y + deltaInchesY, snapIncrement);
+
+		onMoveBed(id, newX, newY);
+	}
+
+	// Plant move handler
+	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number) {
+		const plant = plants.find((p) => p._id === id);
+		if (!plant) return;
+
+		// Convert pixel delta to inches (local bed coordinates)
+		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
+		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
+
+		// Calculate new position (plants use local bed coordinates)
+		const newX = plant.x + deltaInchesX;
+		const newY = plant.y + deltaInchesY;
+
+		onMovePlant(id, newX, newY);
 	}
 </script>
 
@@ -248,6 +279,7 @@
 			heightPixels={heightPx}
 			{pixelsPerInch}
 			{zoom}
+			{snapIncrement}
 			isSelected={selectedBedId === bed._id}
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
@@ -266,6 +298,7 @@
 			hasConflict={conflicts.has(plant._id)}
 			isSelected={selectedPlantId === plant._id}
 			onSelect={onSelectPlant}
+			onMove={handlePlantMove}
 		/>
 	{/each}
 

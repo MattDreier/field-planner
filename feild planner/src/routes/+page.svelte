@@ -5,12 +5,14 @@
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
 	import ZoomControls from '$lib/components/layout/ZoomControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
+	import SnapControls from '$lib/components/layout/SnapControls.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, DragSource, Bed, PlacedPlant } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus } from 'lucide-svelte';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
+	import type { SnapIncrement } from '$lib/utils/snap';
 
 	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
 	const convexAvailable = $derived(isConvexAvailable());
@@ -27,6 +29,9 @@
 	let selectedPlantId = $state<Id<'placedPlants'> | null>(null);
 	let dragSource = $state<DragSource>(null);
 
+	// Snapping state
+	let snapIncrement = $state<SnapIncrement>(0);
+
 	// Default canvas size (in inches - 20ft x 15ft)
 	const canvasWidth = 240; // 20 feet
 	const canvasHeight = 180; // 15 feet
@@ -34,6 +39,9 @@
 	// Local state for beds and plants
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
+
+	// Derived: get the currently selected bed (must be after beds declaration)
+	const selectedBed = $derived(beds.find((b) => b._id === selectedBedId) ?? null);
 
 	// Calculate height range for legend
 	const heightRange = $derived(() => {
@@ -62,6 +70,11 @@
 		zoom = 1.0;
 		panX = 0;
 		panY = 0;
+	}
+
+	// Snap actions
+	function setSnapIncrement(increment: SnapIncrement) {
+		snapIncrement = increment;
 	}
 
 	// Selection handlers
@@ -265,6 +278,7 @@
 				{beds}
 				{plants}
 			/>
+			<SnapControls {snapIncrement} onSnapChange={setSnapIncrement} />
 			<ZoomControls {zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
 		</div>
 	</header>
@@ -276,8 +290,11 @@
 			<BedTools
 				currentTool={currentTool}
 				hasSelection={!!selectedBedId || !!selectedPlantId}
+				{selectedBed}
+				{snapIncrement}
 				onToolChange={setTool}
 				onDelete={handleDelete}
+				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 			/>
 
 			<div class="flex-1 overflow-hidden">
@@ -305,6 +322,7 @@
 					{selectedBedId}
 					{selectedPlantId}
 					{dragSource}
+					{snapIncrement}
 					onSelectBed={selectBed}
 					onSelectPlant={selectPlant}
 					onCreateBed={handleCreateBed}
