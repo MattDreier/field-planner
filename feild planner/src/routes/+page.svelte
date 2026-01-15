@@ -7,12 +7,17 @@
 	import MapControls from '$lib/components/layout/MapControls.svelte';
 	import CanvasSunControls from '$lib/components/canvas/CanvasSunControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
+	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
+	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState } from '$lib/types';
+	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2 } from 'lucide-svelte';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
+	import { timelineState, togglePanel } from '$lib/stores/timeline.svelte';
+	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
+	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
 
 	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
@@ -35,6 +40,7 @@
 	let selectedPlantIds = $state<Set<Id<'placedPlants'>>>(new Set());
 	let viewingFlowerId = $state<string | null>(null); // For viewing flower details from palette
 	let dragSource = $state<DragSource>(null);
+	let showSuccessionPlanner = $state(false);
 
 	// Clipboard for copy/paste
 	interface ClipboardData {
@@ -48,12 +54,21 @@
 	const selectedBedId = $derived(selectedBedIds.size === 1 ? [...selectedBedIds][0] : null);
 	const selectedPlantId = $derived(selectedPlantIds.size === 1 ? [...selectedPlantIds][0] : null);
 
-	// Sun simulation state (default to zone 6b latitude ~40°N, current month)
-	let sunSimulation = $state<SunSimulationState>({
+	// Sun simulation state (default to zone 6b latitude ~40°N)
+	// Month is derived from the timeline's currentViewDate for unified date control
+	let sunSimulationBase = $state<Omit<SunSimulationState, 'month'>>({
 		enabled: false,
 		latitude: 40,
-		month: new Date().getMonth(),
 		timeOfDay: 0.5 // noon
+	});
+
+	// Derive shadow month from timeline's current view date
+	const shadowMonth = $derived(new Date(timelineState.currentViewDate + 'T12:00:00').getMonth());
+
+	// Full sun simulation state with derived month
+	const sunSimulation = $derived<SunSimulationState>({
+		...sunSimulationBase,
+		month: shadowMonth
 	});
 
 	// Local state for beds and plants
@@ -186,6 +201,15 @@
 		selectedBedIds = new Set();
 	}
 
+	// Succession planner handlers
+	function openSuccessionPlanner() {
+		showSuccessionPlanner = true;
+	}
+
+	function closeSuccessionPlanner() {
+		showSuccessionPlanner = false;
+	}
+
 	// Get the selected plant's flower ID for the details panel (single selection only)
 	const selectedPlant = $derived(
 		selectedPlantIds.size === 1 ? plants.find((p) => selectedPlantIds.has(p._id)) ?? null : null
@@ -247,9 +271,40 @@
 		);
 	}
 
-	// Sun simulation update handler
+	// Sun simulation update handler (month is now controlled by timeline, so we filter it out)
 	function handleUpdateSunSimulation(update: Partial<SunSimulationState>) {
-		sunSimulation = { ...sunSimulation, ...update };
+		const { month: _month, ...rest } = update;
+		sunSimulationBase = { ...sunSimulationBase, ...rest };
+	}
+
+	// Determine if a flower should be started indoors based on its data
+	function isIndoorStartFlower(flowerId: string): boolean {
+		const flower = getFlowerById(flowerId);
+		if (!flower) return false;
+
+		// Check propagation method - transplant implies indoor start
+		if (flower.propagationMethod === 'transplant') return true;
+
+		// For seed-propagated plants, check the whenToPlant instructions
+		if (flower.propagationMethod === 'seed') {
+			const whenToPlant = flower.whenToPlant.toLowerCase();
+			// Indoor start indicators
+			if (whenToPlant.includes('start indoors') || whenToPlant.includes('indoor')) {
+				return true;
+			}
+			// Direct sow indicators - explicit check
+			if (whenToPlant.includes('direct sow') || whenToPlant.includes('direct seed')) {
+				return false;
+			}
+		}
+
+		// Corms and divisions are planted directly
+		if (flower.propagationMethod === 'corm' || flower.propagationMethod === 'division') {
+			return false;
+		}
+
+		// Default to direct sow for seeds without explicit indoor instructions
+		return false;
 	}
 
 	// Plant placement handler
@@ -265,6 +320,28 @@
 		// Save state before mutation
 		history.push(beds, plants);
 
+		// Get flower data for scheduling
+		const flower = FLOWER_DATABASE.find(f => f.id === flowerId);
+
+		let plantingDates: PlantingDates;
+
+		if (flower?.plantingSchedule) {
+			// Use zone-aware auto-scheduling
+			const context: ScheduleContext = {
+				zone: timelineState.gardenSettings.hardinessZone,
+				lastFrostDate: new Date(timelineState.gardenSettings.lastFrostDate + 'T12:00:00'),
+				firstFrostDate: new Date(timelineState.gardenSettings.firstFrostDate + 'T12:00:00'),
+				year: new Date().getFullYear()
+			};
+			plantingDates = calculateOptimalPlantingDate(flower.plantingSchedule, context);
+		} else {
+			// Fallback for flowers without schedule
+			const currentDate = timelineState.currentViewDate;
+			plantingDates = isIndoorStartFlower(flowerId)
+				? { indoorStartDate: currentDate }
+				: { directSowDate: currentDate };
+		}
+
 		const newPlant: PlacedPlant = {
 			_id: `plant-${Date.now()}` as Id<'placedPlants'>,
 			bedId,
@@ -275,6 +352,7 @@
 			y,
 			spacingMin,
 			heightMax,
+			plantingDates,
 			createdAt: Date.now()
 		};
 		plants = [...plants, newPlant];
@@ -307,6 +385,18 @@
 			selectedPlantIds = new Set();
 			selectedBedIds = new Set();
 		}
+	}
+
+	// Update plant dates handler (for timeline scheduling)
+	function handleUpdatePlantDates(plantId: string, dates: PlantingDates) {
+		// Save state before mutation
+		history.push(beds, plants);
+
+		plants = plants.map((p) =>
+			p._id === plantId
+				? { ...p, plantingDates: dates }
+				: p
+		);
 	}
 
 	// Drag handlers
@@ -419,6 +509,12 @@
 			// Clear selection
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
+		}
+
+		// Toggle timeline panel with 'T'
+		if (e.key === 't' || e.key === 'T') {
+			e.preventDefault();
+			togglePanel();
 		}
 
 		// Copy: Cmd/Ctrl+C
@@ -580,12 +676,21 @@
 				onZoomOut={zoomOut}
 				onReset={resetZoom}
 			/>
+			<!-- Timeline panel -->
+			<TimelinePanel
+				{beds}
+				{plants}
+				gardenSettings={timelineState.gardenSettings}
+				onOpenSuccessionPlanner={openSuccessionPlanner}
+				onUpdatePlantDates={handleUpdatePlantDates}
+			/>
 		</main>
 
 		<!-- Plant details slide-out panel -->
 		{#if detailsFlowerId}
 			<PlantDetails
 				flowerId={detailsFlowerId}
+				selectedPlant={selectedPlant}
 				onClose={() => {
 					selectedPlantIds = new Set();
 					viewingFlowerId = null;
@@ -593,4 +698,13 @@
 			/>
 		{/if}
 	</div>
+
+	<!-- Succession planner modal -->
+	{#if showSuccessionPlanner}
+		<SuccessionPlanner
+			{beds}
+			layoutId={'local-layout' as Id<'layouts'>}
+			onClose={closeSuccessionPlanner}
+		/>
+	{/if}
 </div>

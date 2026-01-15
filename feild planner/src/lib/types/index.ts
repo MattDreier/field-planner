@@ -1,5 +1,18 @@
 import type { Id } from '../../convex/_generated/dataModel';
 
+// Re-export scheduling types
+export type {
+	PlantingTiming,
+	RelativeToFrostTiming,
+	SoilTemperatureTiming,
+	AfterFrostTiming,
+	SeasonTiming,
+	WorkableSoilTiming,
+	ZoneOverride,
+	PlantingSchedule,
+	ScheduleContext
+} from './scheduling';
+
 // Bed shapes
 export type BedShape = 'rectangle' | 'circle';
 
@@ -29,6 +42,13 @@ export interface CircularBed extends BedBase {
 
 export type Bed = RectangularBed | CircularBed;
 
+// Timeline planting dates
+export interface PlantingDates {
+	indoorStartDate?: string; // ISO date for indoor seeding
+	transplantDate?: string; // When moved outdoors
+	directSowDate?: string; // For direct-sow plants
+}
+
 // Placed plant interface
 export interface PlacedPlant {
 	_id: Id<'placedPlants'>;
@@ -41,6 +61,33 @@ export interface PlacedPlant {
 	heightMax: number; // inches
 	name: string;
 	createdAt: number;
+	// Timeline scheduling (optional for backward compatibility)
+	plantingDates?: PlantingDates;
+	successionGroupId?: string; // Links succession plants together
+	successionIndex?: number; // Order within succession (0, 1, 2...)
+}
+
+// Planned plant (future planting not yet on canvas)
+export interface PlannedPlant {
+	_id: Id<'plannedPlants'>;
+	layoutId: Id<'layouts'>;
+	bedId: Id<'beds'>; // Required - all entries linked to beds
+	flowerId: string;
+	plantingDates: PlantingDates;
+	successionGroupId?: string;
+	successionIndex?: number;
+	quantity: number;
+	status: 'planned' | 'started' | 'transplanted' | 'harvesting' | 'complete';
+	notes?: string;
+	createdAt: number;
+}
+
+// Garden settings for timeline calculations
+export interface GardenSettings {
+	hardinessZone: string; // e.g., "6b", "7a"
+	lastFrostDate: string; // ISO date (auto-filled from zone, editable)
+	firstFrostDate: string; // ISO date
+	latitude: number; // For sun calculations
 }
 
 // Layout interface

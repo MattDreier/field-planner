@@ -3,6 +3,8 @@
  * Contains detailed growing information for 13 cut flower varieties
  */
 
+import type { PlantingSchedule } from '$lib/types';
+
 export interface FlowerData {
   id: string;
   name: string;
@@ -53,6 +55,9 @@ export interface FlowerData {
   harvestTips?: string;
   commonPests?: string[];
   companionPlants?: string[];
+
+  // Structured planting schedule
+  plantingSchedule?: PlantingSchedule;
 }
 
 export const FLOWER_DATABASE: FlowerData[] = [
@@ -91,7 +96,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'red', 'orange', 'yellow', 'white', 'purple', 'lime'],
     harvestTips: 'Cut when flowers fully open; perform wiggle test for stem firmness',
     commonPests: ['Japanese beetles', 'aphids', 'spider mites'],
-    companionPlants: ['Marigolds', 'Nasturtiums', 'Tomatoes']
+    companionPlants: ['Marigolds', 'Nasturtiums', 'Tomatoes'],
+    plantingSchedule: {
+      primary: { type: 'soil-temperature', minTemp: 70, method: 'direct' }
+    }
   },
   {
     id: 'snapdragons',
@@ -127,7 +135,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'red', 'orange', 'yellow', 'white', 'purple', 'bronze'],
     harvestTips: 'Cut when 1/4 to 1/3 of florets are open on spike',
     commonPests: ['Aphids', 'rust disease'],
-    companionPlants: ['Pansies', 'Violas', 'Sweet Peas']
+    companionPlants: ['Pansies', 'Violas', 'Sweet Peas'],
+    plantingSchedule: {
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 8, weeksOffsetMax: 12, method: 'indoor' }
+    }
   },
   {
     id: 'anemones',
@@ -162,7 +173,13 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'red', 'white', 'purple', 'blue'],
     harvestTips: 'Cut when buds show color but before fully open',
     commonPests: ['Aphids', 'slugs'],
-    companionPlants: ['Ranunculus', 'Spring bulbs', 'Sweet Peas']
+    companionPlants: ['Ranunculus', 'Spring bulbs', 'Sweet Peas'],
+    plantingSchedule: {
+      primary: { type: 'season', season: 'late-winter', method: 'direct' },
+      zoneOverrides: [
+        { zones: ['7a', '7b', '8a', '8b', '9a', '9b', '10a', '10b'], timing: { type: 'season', season: 'fall', method: 'direct' } }
+      ]
+    }
   },
   {
     id: 'poppies',
@@ -199,7 +216,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'red', 'white', 'purple', 'lavender'],
     harvestTips: 'Cut when buds are upright and showing color (cracked tepals); sear stem ends immediately',
     commonPests: ['Few pest issues'],
-    companionPlants: ['Calendula', 'Bachelor Buttons', 'Larkspur']
+    companionPlants: ['Calendula', 'Bachelor Buttons', 'Larkspur'],
+    plantingSchedule: {
+      primary: { type: 'season', season: 'early-spring', method: 'direct' }
+    }
   },
   {
     id: 'calendulas',
@@ -236,7 +256,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['orange', 'yellow', 'apricot'],
     harvestTips: 'Harvest when flowers fully open; deadhead regularly',
     commonPests: ['Aphids', 'whiteflies', 'powdery mildew'],
-    companionPlants: ['Tomatoes', 'Lettuce', 'Peas', 'Carrots']
+    companionPlants: ['Tomatoes', 'Lettuce', 'Peas', 'Carrots'],
+    plantingSchedule: {
+      primary: { type: 'soil-temperature', minTemp: 60, method: 'direct' }
+    }
   },
   {
     id: 'cosmos',
@@ -273,10 +296,13 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'white', 'red', 'orange', 'yellow'],
     harvestTips: 'Cut when flowers fully open; pinch when 12" tall for bushier plants',
     commonPests: ['Very few - highly resistant'],
-    companionPlants: ['Zinnias', 'Sunflowers', 'Marigolds']
+    companionPlants: ['Zinnias', 'Sunflowers', 'Marigolds'],
+    plantingSchedule: {
+      primary: { type: 'soil-temperature', minTemp: 65, method: 'direct' }
+    }
   },
   {
-    id: 'belle-of-ireland',
+    id: 'bells-of-ireland',
     name: 'Belle of Ireland',
     scientificName: 'Moluccella laevis',
     category: 'hardy-annual',
@@ -310,7 +336,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['green', 'lime-green'],
     harvestTips: 'Cut when most bells are mature; remove leaves for better vase life; hang upside down to dry',
     commonPests: ['Few issues'],
-    companionPlants: ['Other cool-season flowers']
+    companionPlants: ['Other cool-season flowers'],
+    plantingSchedule: {
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 10, method: 'indoor' }
+    }
   },
   {
     id: 'eucalyptus',
@@ -347,7 +376,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['silver-blue', 'gray-green'],
     harvestTips: 'Pinch regularly to encourage branching; remove lower leaves before arranging',
     commonPests: ['Generally pest-free'],
-    companionPlants: ['Works with most flowers as foliage accent']
+    companionPlants: ['Works with most flowers as foliage accent'],
+    plantingSchedule: {
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 10, weeksOffsetMax: 12, method: 'indoor' }
+    }
   },
   {
     id: 'persian-cress',
@@ -384,7 +416,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['white', 'pink'],
     harvestTips: 'Good filler flower; delicate white flowers in clusters',
     commonPests: ['Few issues'],
-    companionPlants: ['Other cool-season crops']
+    companionPlants: ['Other cool-season crops'],
+    plantingSchedule: {
+      primary: { type: 'workable-soil', method: 'direct' }
+    }
   },
   {
     id: 'hollyhocks',
@@ -420,7 +455,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'red', 'yellow', 'white', 'purple', 'black'],
     harvestTips: 'Cut when bottom flowers are opening on tall spikes; may need staking',
     commonPests: ['Rust disease', 'Japanese beetles', 'slugs'],
-    companionPlants: ['Cottage garden flowers', 'Roses', 'Delphiniums']
+    companionPlants: ['Cottage garden flowers', 'Roses', 'Delphiniums'],
+    plantingSchedule: {
+      primary: { type: 'after-frost', weeksAfter: 0, method: 'direct' }
+    }
   },
   {
     id: 'pink-pokers',
@@ -455,7 +493,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['pink', 'coral', 'orange', 'yellow', 'red'],
     harvestTips: 'Cut when lower florets are opening; excellent architectural element in arrangements',
     commonPests: ['Very few - deer resistant'],
-    companionPlants: ['Ornamental grasses', 'Rudbeckia', 'Echinacea']
+    companionPlants: ['Ornamental grasses', 'Rudbeckia', 'Echinacea'],
+    plantingSchedule: {
+      primary: { type: 'after-frost', weeksAfter: 0, method: 'direct' }
+    }
   },
   {
     id: 'big-smile-sunflower',
@@ -492,7 +533,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['yellow', 'golden-yellow'],
     harvestTips: 'Cut when petals are fully open but before pollen sheds; succession plant every 2 weeks',
     commonPests: ['Few issues in this dwarf variety'],
-    companionPlants: ['Zinnias', 'Cosmos', 'Nasturtiums']
+    companionPlants: ['Zinnias', 'Cosmos', 'Nasturtiums'],
+    plantingSchedule: {
+      primary: { type: 'after-frost', weeksAfter: 0, method: 'direct' }
+    }
   },
   {
     id: 'lacy-lavender-blue',
@@ -529,7 +573,10 @@ export const FLOWER_DATABASE: FlowerData[] = [
     colors: ['lavender-blue', 'pink', 'white'],
     harvestTips: 'Cut when most florets in cluster are open; may need support as stems can be delicate',
     commonPests: ['Generally pest-free'],
-    companionPlants: ['Snapdragons', 'Sweet Peas', 'Other cool-season flowers']
+    companionPlants: ['Snapdragons', 'Sweet Peas', 'Other cool-season flowers'],
+    plantingSchedule: {
+      primary: { type: 'after-frost', weeksAfter: 0, method: 'direct' }
+    }
   }
 ];
 
