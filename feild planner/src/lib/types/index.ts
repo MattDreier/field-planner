@@ -131,7 +131,7 @@ export interface CanvasState {
 }
 
 // Active tool
-export type Tool = 'select' | 'rectangle' | 'circle';
+export type Tool = 'select' | 'rectangle' | 'circle' | 'shadows';
 
 // Drag source for drag-and-drop
 export type DragSource =

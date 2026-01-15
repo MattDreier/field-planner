@@ -5,8 +5,7 @@
 	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
 	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
 	import MapControls from '$lib/components/layout/MapControls.svelte';
-	import CanvasSunControls from '$lib/components/canvas/CanvasSunControls.svelte';
-	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
+		import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -628,10 +627,12 @@
 				currentTool={currentTool}
 				hasSelection={!!selectedBedId || !!selectedPlantId}
 				{selectedBed}
+				{sunSimulation}
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
+				onUpdateSunSimulation={handleUpdateSunSimulation}
 			/>
 
 			<div class="flex-1 overflow-hidden">
@@ -670,7 +671,6 @@
 				onZoom={handleZoomWithPivot}
 			/>
 			<!-- Canvas overlay controls -->
-			<CanvasSunControls {sunSimulation} onUpdate={handleUpdateSunSimulation} />
 			<MapControls
 				onZoomIn={zoomIn}
 				onZoomOut={zoomOut}

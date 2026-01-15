@@ -1,26 +1,49 @@
 <script lang="ts">
+	import { ToggleGroup } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, Bed } from '$lib/types';
-	import { MousePointer2, Square, Circle, Trash2 } from 'lucide-svelte';
+	import type { Tool, Bed, SunSimulationState } from '$lib/types';
+	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin } from 'lucide-svelte';
+	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
 
 	interface Props {
 		currentTool: Tool;
 		hasSelection: boolean;
 		selectedBed: Bed | null;
+		sunSimulation: SunSimulationState;
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 		onRotateBed?: (id: string, rotation: number) => void;
+		onUpdateSunSimulation: (state: Partial<SunSimulationState>) => void;
 	}
 
-	let { currentTool, hasSelection, selectedBed, onToolChange, onDelete, onResizeBed, onRotateBed }: Props = $props();
+	let {
+		currentTool,
+		hasSelection,
+		selectedBed,
+		sunSimulation,
+		onToolChange,
+		onDelete,
+		onResizeBed,
+		onRotateBed,
+		onUpdateSunSimulation
+	}: Props = $props();
 
-	// Local input values for controlled inputs
+	// Bed property inputs
 	let widthInput = $state('');
 	let heightInput = $state('');
 	let rotationInput = $state('');
 
-	// Sync local inputs when selected bed changes
+	// Sun simulation state
+	let isRequestingLocation = $state(false);
+	let locationError = $state<string | null>(null);
+
+	// Derived values for shadow controls
+	const monthName = $derived(getMonthName(sunSimulation.month));
+	const timeDisplay = $derived(formatTimeOfDay(sunSimulation.timeOfDay));
+	const daylightHours = $derived(getDaylightHours(sunSimulation.latitude, sunSimulation.month));
+
+	// Sync bed inputs when selected bed changes
 	$effect(() => {
 		if (selectedBed) {
 			widthInput = selectedBed.widthFeet.toFixed(2);
@@ -28,6 +51,16 @@
 			rotationInput = (selectedBed.rotation ?? 0).toFixed(0);
 		}
 	});
+
+	function handleToolChange(value: string | undefined) {
+		if (!value) return;
+		const tool = value as Tool;
+		// Auto-enable shadows when switching to shadows tool
+		if (tool === 'shadows' && !sunSimulation.enabled) {
+			onUpdateSunSimulation({ enabled: true });
+		}
+		onToolChange(tool);
+	}
 
 	function handleWidthChange(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -50,9 +83,62 @@
 		const target = e.target as HTMLInputElement;
 		const value = parseFloat(target.value);
 		if (!isNaN(value) && selectedBed && onRotateBed) {
-			// Normalize to 0-360
 			const normalizedValue = ((value % 360) + 360) % 360;
 			onRotateBed(selectedBed._id, normalizedValue);
+		}
+	}
+
+	function handleTimeChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		onUpdateSunSimulation({ timeOfDay: value });
+	}
+
+	function handleLatitudeChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= -90 && value <= 90) {
+			onUpdateSunSimulation({ latitude: value });
+		}
+	}
+
+	async function requestGeolocation() {
+		if (!navigator.geolocation) {
+			locationError = 'Geolocation not supported';
+			return;
+		}
+
+		isRequestingLocation = true;
+		locationError = null;
+
+		try {
+			const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+				navigator.geolocation.getCurrentPosition(resolve, reject, {
+					enableHighAccuracy: false,
+					timeout: 10000,
+					maximumAge: 300000
+				});
+			});
+
+			onUpdateSunSimulation({ latitude: position.coords.latitude });
+		} catch (error) {
+			if (error instanceof GeolocationPositionError) {
+				switch (error.code) {
+					case error.PERMISSION_DENIED:
+						locationError = 'Location access denied';
+						break;
+					case error.POSITION_UNAVAILABLE:
+						locationError = 'Location unavailable';
+						break;
+					case error.TIMEOUT:
+						locationError = 'Location request timed out';
+						break;
+				}
+			} else {
+				locationError = 'Failed to get location';
+			}
+		} finally {
+			isRequestingLocation = false;
 		}
 	}
 </script>
@@ -60,38 +146,47 @@
 <div class="p-4 border-b border-border">
 	<h3 class="font-semibold text-lg mb-3">Tools</h3>
 
-	<div class="flex flex-wrap gap-2">
-		<Button
-			variant={currentTool === 'select' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => onToolChange('select')}
-			class="flex items-center gap-2"
+	<!-- Icon-only toolbar (Figma style) -->
+	<ToggleGroup.Root
+		type="single"
+		value={currentTool}
+		onValueChange={handleToolChange}
+		class="inline-flex rounded-lg bg-muted p-1 gap-1"
+	>
+		<ToggleGroup.Item
+			value="select"
+			title="Select (V)"
+			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
 		>
 			<MousePointer2 class="w-4 h-4" />
-			Select
-		</Button>
+		</ToggleGroup.Item>
 
-		<Button
-			variant={currentTool === 'rectangle' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => onToolChange('rectangle')}
-			class="flex items-center gap-2"
+		<ToggleGroup.Item
+			value="rectangle"
+			title="Rectangle Bed (R)"
+			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
 		>
 			<Square class="w-4 h-4" />
-			Rectangle
-		</Button>
+		</ToggleGroup.Item>
 
-		<Button
-			variant={currentTool === 'circle' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => onToolChange('circle')}
-			class="flex items-center gap-2"
+		<ToggleGroup.Item
+			value="circle"
+			title="Circle Bed (C)"
+			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
 		>
 			<Circle class="w-4 h-4" />
-			Circle
-		</Button>
-	</div>
+		</ToggleGroup.Item>
 
+		<ToggleGroup.Item
+			value="shadows"
+			title="Shadow Simulation"
+			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm {sunSimulation.enabled && currentTool !== 'shadows' ? 'text-amber-500' : ''}"
+		>
+			<Sun class="w-4 h-4" />
+		</ToggleGroup.Item>
+	</ToggleGroup.Root>
+
+	<!-- Delete button (when selection exists) -->
 	{#if hasSelection}
 		<div class="mt-4 pt-4 border-t border-border">
 			<Button
@@ -106,6 +201,7 @@
 		</div>
 	{/if}
 
+	<!-- Bed Properties (when bed selected) -->
 	{#if selectedBed}
 		<div class="mt-4 pt-4 border-t border-border">
 			<h4 class="font-medium text-sm mb-3">
@@ -145,7 +241,6 @@
 					</div>
 				{/if}
 
-				<!-- Rotation input -->
 				<div>
 					<label for="bed-rotation" class="block text-xs text-muted-foreground mb-1">
 						Rotation (degrees)
@@ -165,6 +260,99 @@
 		</div>
 	{/if}
 
+	<!-- Shadow Controls (when shadows tool active) -->
+	{#if currentTool === 'shadows'}
+		<div class="mt-4 pt-4 border-t border-border space-y-3">
+			<div class="flex items-center justify-between">
+				<h4 class="font-medium text-sm">Shadow Simulation</h4>
+				{#if sunSimulation.enabled}
+					<button
+						onclick={() => onUpdateSunSimulation({ enabled: false })}
+						class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+					>
+						Disable
+					</button>
+				{:else}
+					<button
+						onclick={() => onUpdateSunSimulation({ enabled: true })}
+						class="text-xs text-primary hover:text-primary/80 transition-colors"
+					>
+						Enable
+					</button>
+				{/if}
+			</div>
+
+			{#if sunSimulation.enabled}
+				<!-- Month (read-only, synced with timeline) -->
+				<div class="space-y-1">
+					<div class="flex justify-between items-center">
+						<label class="text-xs text-muted-foreground">Month</label>
+						<span class="text-xs font-medium">{monthName}</span>
+					</div>
+					<p class="text-[10px] text-muted-foreground/70">Synced with timeline</p>
+				</div>
+
+				<!-- Time of Day Slider -->
+				<div class="space-y-1">
+					<div class="flex justify-between items-center">
+						<label class="text-xs text-muted-foreground">Time of Day</label>
+						<span class="text-xs font-medium">{timeDisplay}</span>
+					</div>
+					<input
+						type="range"
+						min="0"
+						max="1"
+						step="0.01"
+						value={sunSimulation.timeOfDay}
+						oninput={handleTimeChange}
+						class="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-amber-500"
+					/>
+					<div class="flex justify-between text-[10px] text-muted-foreground/70">
+						<span>Sunrise</span>
+						<span>Noon</span>
+						<span>Sunset</span>
+					</div>
+				</div>
+
+				<!-- Location -->
+				<div class="space-y-2 pt-2 border-t border-border">
+					<label class="text-xs text-muted-foreground">Location</label>
+					<div class="flex items-center gap-2">
+						<button
+							onclick={requestGeolocation}
+							disabled={isRequestingLocation}
+							class="flex items-center gap-1 px-2 py-1.5 text-xs bg-muted hover:bg-muted/80 disabled:opacity-50 rounded transition-colors"
+						>
+							<MapPin class="w-3 h-3" />
+							{isRequestingLocation ? '...' : 'My Location'}
+						</button>
+						<div class="flex items-center gap-1">
+							<input
+								type="number"
+								min="-90"
+								max="90"
+								step="0.1"
+								value={sunSimulation.latitude.toFixed(1)}
+								onchange={handleLatitudeChange}
+								class="w-16 px-2 py-1.5 text-xs border border-input rounded-md bg-background"
+							/>
+							<span class="text-xs text-muted-foreground">°N</span>
+						</div>
+					</div>
+					{#if locationError}
+						<p class="text-[10px] text-destructive">{locationError}</p>
+					{/if}
+				</div>
+
+				<!-- Daylight info -->
+				<p class="text-xs text-muted-foreground pt-2 border-t border-border">
+					~{daylightHours.toFixed(1)} hours of daylight
+				</p>
+			{/if}
+		</div>
+	{/if}
+
+	<!-- Help text -->
 	<div class="mt-4 text-xs text-muted-foreground">
 		{#if currentTool === 'select'}
 			<p>Click to select beds or plants. Drag to move.</p>
@@ -172,6 +360,8 @@
 			<p>Click and drag on canvas to create a rectangular bed.</p>
 		{:else if currentTool === 'circle'}
 			<p>Click and drag on canvas to create a circular bed.</p>
+		{:else if currentTool === 'shadows'}
+			<p>Visualize how shadows fall across your garden throughout the day.</p>
 		{/if}
 	</div>
 </div>
