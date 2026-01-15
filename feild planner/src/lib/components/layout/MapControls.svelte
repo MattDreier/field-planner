@@ -198,10 +198,11 @@
 				</svg>
 			</button>
 
-			<!-- Rotation indicator badge (shows current angle when rotated) -->
-			{#if rotation !== 0 && !isDragging}
+			<!-- Rotation indicator badge (shows current angle when rotated or dragging) -->
+			{#if rotation !== 0 || isDragging}
 				<div
-					class="absolute -top-1 -right-1 bg-blue-500 text-white text-[9px] font-bold px-1 rounded-full shadow-sm"
+					class="absolute -top-1 -right-1 bg-blue-500 text-white text-[9px] font-bold px-1 rounded-full shadow-sm
+						{isDragging ? 'scale-110' : ''} transition-transform"
 				>
 					{Math.round(rotation)}°
 				</div>

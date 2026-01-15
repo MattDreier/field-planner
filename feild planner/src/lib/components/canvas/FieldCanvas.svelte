@@ -754,7 +754,7 @@
 <svg
 	bind:this={svgElement}
 	class="w-full h-full border border-border rounded-lg shadow-inner touch-none"
-	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'}; transform: rotate({rotation}deg); transform-origin: center;"
+	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'};"
 	onpointerdown={handleCanvasPointerDown}
 	onpointermove={handleCanvasPointerMove}
 	onpointerup={handleCanvasPointerUp}
@@ -772,7 +772,7 @@
 		</filter>
 	</defs>
 
-	<!-- Grid background (fills viewport, offset by pan) -->
+	<!-- Grid background (fixed, doesn't rotate - serves as coordinate reference) -->
 	<GridBackground
 		width={viewportWidth}
 		height={viewportHeight}
@@ -781,6 +781,9 @@
 		{panX}
 		{panY}
 	/>
+
+	<!-- Rotation wrapper - rotates garden content around viewport center -->
+	<g transform="rotate({rotation}, {viewportWidth / 2}, {viewportHeight / 2})">
 
 	<!-- Shadow layer (below beds) -->
 	{#if sunSimulation.enabled && shadows.length > 0}
@@ -979,4 +982,6 @@
 			/>
 		{/if}
 	{/if}
+
+	</g><!-- End rotation wrapper -->
 </svg>
