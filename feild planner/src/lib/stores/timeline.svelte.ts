@@ -4,7 +4,7 @@ import { getFrostDatesFromZone } from '$lib/data/hardinessZones';
 import { formatDateISO } from '$lib/utils/timeline';
 
 // View scale options
-export type TimelineViewScale = 'week' | 'month' | 'season';
+export type TimelineViewScale = 'day' | 'week' | 'month' | 'season';
 
 // Timeline state using Svelte 5 runes
 export const timelineState = $state({
@@ -68,15 +68,18 @@ export function setScrollOffset(offset: number) {
 }
 
 // Current view date actions
-export function setCurrentViewDate(dateOrString: Date | string) {
+// skipYearUpdate: set to true in season view to prevent feedback loop
+export function setCurrentViewDate(dateOrString: Date | string, skipYearUpdate = false) {
 	const dateStr =
 		typeof dateOrString === 'string' ? dateOrString : dateOrString.toISOString().split('T')[0];
 	timelineState.currentViewDate = dateStr;
 
-	// Also update viewYear if date is in a different year
-	const year = parseInt(dateStr.split('-')[0], 10);
-	if (year !== timelineState.viewYear) {
-		timelineState.viewYear = year;
+	// Update viewYear if date is in a different year (unless skipped for season view)
+	if (!skipYearUpdate) {
+		const year = parseInt(dateStr.split('-')[0], 10);
+		if (year !== timelineState.viewYear) {
+			timelineState.viewYear = year;
+		}
 	}
 }
 
