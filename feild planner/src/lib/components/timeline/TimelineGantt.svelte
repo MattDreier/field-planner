@@ -77,23 +77,55 @@
 		return markers;
 	});
 
-	// Generate week markers for week view grid lines
+	// Generate week markers for week view - columns AND grid lines
 	const weekMarkers = $derived.by(() => {
 		if (viewScale !== 'week') return [];
 
-		const markers: { dayOffset: number; weekNum: number }[] = [];
-		// Find first Sunday of the year (or adjust to Monday if preferred)
-		const firstDay = new Date(timeRange.start);
-		const dayOfWeek = firstDay.getDay(); // 0 = Sunday
-		const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+		const markers: {
+			dayOffset: number;
+			weekNum: number;
+			width: number;
+			label: string;
+			isPartial: boolean;
+		}[] = [];
 
-		let currentOffset = daysUntilSunday;
+		// Start from day 0 of the year
+		let currentOffset = 0;
 		let weekNum = 1;
 
+		// First week may be partial (if year doesn't start on Sunday)
+		const firstDay = new Date(timeRange.start);
+		const dayOfWeek = firstDay.getDay(); // 0 = Sunday
+
+		// If year doesn't start on Sunday, first "week" is partial
+		if (dayOfWeek !== 0) {
+			const daysInFirstWeek = 7 - dayOfWeek;
+			const weekStart = new Date(timeRange.start);
+			markers.push({
+				dayOffset: 0,
+				weekNum: weekNum++,
+				width: daysInFirstWeek,
+				label: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+				isPartial: true
+			});
+			currentOffset = daysInFirstWeek;
+		}
+
+		// Full weeks
 		while (currentOffset < totalDays) {
-			markers.push({ dayOffset: currentOffset, weekNum });
+			const weekStart = new Date(timeRange.start);
+			weekStart.setDate(weekStart.getDate() + currentOffset);
+			const remainingDays = totalDays - currentOffset;
+			const weekWidth = Math.min(7, remainingDays);
+
+			markers.push({
+				dayOffset: currentOffset,
+				weekNum: weekNum++,
+				width: weekWidth,
+				label: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+				isPartial: weekWidth < 7
+			});
 			currentOffset += 7;
-			weekNum++;
 		}
 		return markers;
 	});
@@ -421,6 +453,21 @@
 				</g>
 			{/if}
 
+			<!-- Week view: week column backgrounds -->
+			{#if viewScale === 'week'}
+				<g class="week-backgrounds">
+					{#each weekMarkers as marker}
+						<rect
+							x={marker.dayOffset * dayWidth}
+							y={0}
+							width={marker.width * dayWidth}
+							height={contentHeight + HEADER_HEIGHT}
+							style={marker.weekNum % 2 === 0 ? 'fill: var(--color-muted)' : 'fill: transparent'}
+						/>
+					{/each}
+				</g>
+			{/if}
+
 			<!-- Month headers -->
 			<g class="month-headers">
 				{#each monthMarkers as marker, i}
@@ -429,8 +476,8 @@
 						? (nextMarker.dayOffset - marker.dayOffset) * dayWidth
 						: (totalDays - marker.dayOffset) * dayWidth}
 
-					<!-- Month column background (full height) - not in day view -->
-					{#if viewScale !== 'day'}
+					<!-- Month column background (full height) - not in day or week view -->
+					{#if viewScale !== 'day' && viewScale !== 'week'}
 						<rect
 							x={marker.dayOffset * dayWidth}
 							y={0}
@@ -470,8 +517,8 @@
 						>
 							{marker.name}
 						</text>
-					{:else if viewScale === 'day'}
-						<!-- In day view, month labels at top -->
+					{:else if viewScale === 'day' || viewScale === 'week'}
+						<!-- In day and week view, month labels at top at boundaries -->
 						{#if i === 0 || marker.month !== monthMarkers[i - 1]?.month}
 							<text
 								x={marker.dayOffset * dayWidth + 4}
@@ -504,19 +551,28 @@
 				{/each}
 			</g>
 
-			<!-- Week grid lines (week view only) -->
+			<!-- Week grid lines and labels (week view only) -->
 			{#if viewScale === 'week'}
 				<g class="week-grid">
 					{#each weekMarkers as marker}
+						<!-- Week separator line -->
 						<line
 							x1={marker.dayOffset * dayWidth}
 							y1={HEADER_HEIGHT}
 							x2={marker.dayOffset * dayWidth}
 							y2={contentHeight + HEADER_HEIGHT}
-							stroke="hsl(var(--border) / 0.5)"
+							stroke="hsl(var(--border) / 0.4)"
 							stroke-width="1"
-							stroke-dasharray="4 4"
 						/>
+						<!-- Week label in header -->
+						<text
+							x={marker.dayOffset * dayWidth + (marker.width * dayWidth) / 2}
+							y={HEADER_HEIGHT - 8}
+							text-anchor="middle"
+							class="text-xs fill-muted-foreground"
+						>
+							{marker.label}
+						</text>
 					{/each}
 				</g>
 			{/if}
