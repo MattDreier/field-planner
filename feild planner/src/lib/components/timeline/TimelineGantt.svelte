@@ -386,7 +386,7 @@
 							{/if}
 						</span>
 						{#if row.entry.type === 'planned'}
-							<span class="ml-1 text-xs text-amber-600 bg-amber-100 px-1 rounded">planned</span>
+							<span class="ml-1 text-xs text-amber-500 bg-amber-500/20 px-1 rounded">planned</span>
 						{/if}
 					</div>
 				{/if}
@@ -415,7 +415,7 @@
 							y={0}
 							width={dayWidth}
 							height={contentHeight + HEADER_HEIGHT}
-							fill={marker.isWeekend ? 'oklch(0.96 0.01 260)' : 'transparent'}
+							style={marker.isWeekend ? 'fill: var(--color-muted)' : 'fill: transparent'}
 						/>
 					{/each}
 				</g>
@@ -436,7 +436,7 @@
 							y={0}
 							width={width}
 							height={contentHeight + HEADER_HEIGHT}
-							fill={marker.month % 2 === 0 ? 'oklch(0.97 0.015 75)' : 'transparent'}
+							style={marker.month % 2 === 0 ? 'fill: var(--color-muted)' : 'fill: transparent'}
 						/>
 					{/if}
 
@@ -447,7 +447,7 @@
 							y={0}
 							width={width * 12}
 							height={HEADER_HEIGHT}
-							fill="oklch(0.95 0.02 220)"
+							style="fill: var(--color-accent)"
 							class="opacity-30"
 						/>
 						<text

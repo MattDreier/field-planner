@@ -32,7 +32,7 @@
 		<path
 			d="M {minorGridSize} 0 L 0 0 0 {minorGridSize}"
 			fill="none"
-			stroke="rgba(0,0,0,0.1)"
+			style="stroke: var(--color-grid-minor)"
 			stroke-width="0.5"
 		/>
 	</pattern>
@@ -49,12 +49,12 @@
 		<path
 			d="M {majorGridSize} 0 L 0 0 0 {majorGridSize}"
 			fill="none"
-			stroke="rgba(0,0,0,0.25)"
+			style="stroke: var(--color-grid-major)"
 			stroke-width="1"
 		/>
 	</pattern>
 </defs>
 
 <!-- Background fill with grid -->
-<rect {width} {height} fill="white" />
+<rect {width} {height} style="fill: var(--color-canvas)" />
 <rect {width} {height} fill="url(#majorGrid)" />

@@ -19,13 +19,13 @@
 
 <g transform="translate({x}, {y})" class="pointer-events-none" role="img" aria-label="Compass showing North direction">
 	<!-- Outer circle background -->
-	<circle r={radius} fill="rgba(255, 255, 255, 0.9)" stroke="#9ca3af" stroke-width="1" />
+	<circle r={radius} style="fill: var(--color-card); stroke: var(--color-border)" stroke-width="1" />
 
 	<!-- Inner circle -->
-	<circle r={innerRadius * 0.3} fill="none" stroke="#d1d5db" stroke-width="1" />
+	<circle r={innerRadius * 0.3} fill="none" style="stroke: var(--color-border)" stroke-width="1" />
 
 	<!-- Cardinal direction lines -->
-	<g stroke="#d1d5db" stroke-width="1">
+	<g style="stroke: var(--color-border)" stroke-width="1">
 		<line x1="0" y1={-innerRadius} x2="0" y2={innerRadius} />
 		<line x1={-innerRadius} y1="0" x2={innerRadius} y2="0" />
 	</g>
@@ -39,17 +39,17 @@
 	<!-- South arrow (gray, subtle) -->
 	<polygon
 		points="0,{radius * 0.85} {-5},{radius * 0.5} {5},{radius * 0.5}"
-		fill="#9ca3af"
+		style="fill: var(--color-muted-foreground)"
 	/>
 
 	<!-- East/West indicators -->
 	<polygon
 		points="{radius * 0.85},0 {radius * 0.5},{-4} {radius * 0.5},{4}"
-		fill="#9ca3af"
+		style="fill: var(--color-muted-foreground)"
 	/>
 	<polygon
 		points="{-radius * 0.85},0 {-radius * 0.5},{-4} {-radius * 0.5},{4}"
-		fill="#9ca3af"
+		style="fill: var(--color-muted-foreground)"
 	/>
 
 	<!-- Cardinal labels -->
@@ -67,7 +67,7 @@
 		text-anchor="middle"
 		dominant-baseline="middle"
 		class="text-xs"
-		fill="#6b7280"
+		style="fill: var(--color-muted-foreground)"
 	>
 		S
 	</text>
@@ -76,7 +76,7 @@
 		text-anchor="middle"
 		dominant-baseline="middle"
 		class="text-xs"
-		fill="#6b7280"
+		style="fill: var(--color-muted-foreground)"
 	>
 		E
 	</text>
@@ -85,11 +85,11 @@
 		text-anchor="middle"
 		dominant-baseline="middle"
 		class="text-xs"
-		fill="#6b7280"
+		style="fill: var(--color-muted-foreground)"
 	>
 		W
 	</text>
 
 	<!-- Center dot -->
-	<circle r="3" fill="#374151" />
+	<circle r="3" style="fill: var(--color-foreground)" />
 </g>

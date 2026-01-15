@@ -12,6 +12,7 @@
 	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2 } from 'lucide-svelte';
+	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
 	import { timelineState, togglePanel } from '$lib/stores/timeline.svelte';
@@ -632,6 +633,8 @@
 					<Redo2 class="h-4 w-4" />
 				</Button>
 			</div>
+
+			<ModeToggle />
 
 			<LayoutManager
 				isConvexAvailable={convexAvailable}
