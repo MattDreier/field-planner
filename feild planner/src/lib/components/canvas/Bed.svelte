@@ -2,7 +2,6 @@
 	import RotationHandle from './RotationHandle.svelte';
 	import type { Bed as BedType } from '$lib/types';
 	import type { Id } from '../../../convex/_generated/dataModel';
-	import { snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
 
 	interface Props {
 		bed: BedType;
@@ -12,17 +11,17 @@
 		heightPixels: number;
 		pixelsPerInch: number;
 		zoom: number;
-		snapIncrement: SnapIncrement;
 		isSelected: boolean;
 		selectedBedIds: Set<Id<'beds'>>; // All selected beds for multi-drag
 		onSelect: (id: Id<'beds'>, shiftKey?: boolean) => void;
 		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>) => void;
 		onMoveStart?: () => void; // Called once when drag/resize begins (for history snapshot)
+		onMoveEnd?: () => void; // Called when drag/resize ends (for clearing guides)
 		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 		onRotate?: (id: Id<'beds'>, rotation: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, selectedBedIds, onSelect, onMove, onMoveStart, onResize, onRotate }: Props = $props();
+	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, isSelected, selectedBedIds, onSelect, onMove, onMoveStart, onMoveEnd, onResize, onRotate }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
@@ -80,6 +79,7 @@
 	function handlePointerUp(e: PointerEvent) {
 		isDragging = false;
 		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+		onMoveEnd?.();
 	}
 
 	// Resize handle events
@@ -125,16 +125,13 @@
 				break;
 		}
 
-		// Apply snapping to dimensions
-		newWidthFeet = snapFeetToGrid(newWidthFeet, snapIncrement);
-		newHeightFeet = snapFeetToGrid(newHeightFeet, snapIncrement);
-
 		onResize(bed._id, newWidthFeet, newHeightFeet);
 	}
 
 	function handleResizePointerUp(e: PointerEvent) {
 		resizeHandle = null;
 		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+		onMoveEnd?.();
 	}
 
 	// Resize handles (shown when selected)
@@ -278,7 +275,7 @@
 			{centerX}
 			{centerY}
 			currentRotation={rotation}
-			distance={Math.max(widthPixels, heightPixels) / 2 + 30}
+			distance={heightPixels / 2 + 30}
 			onRotate={handleRotation}
 			onRotateStart={onMoveStart}
 		/>

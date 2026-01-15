@@ -95,15 +95,4 @@
 		onpointerup={handlePointerUp}
 	/>
 
-	<!-- Rotation icon inside handle -->
-	<g transform="translate({handleX}, {handleY})" class="pointer-events-none">
-		<path
-			d="M-3,-2 A4,4 0 1,1 3,-2"
-			fill="none"
-			stroke="rgb(59, 130, 246)"
-			stroke-width="1.5"
-			stroke-linecap="round"
-		/>
-		<polygon points="3,-2 5,0 1,0" fill="rgb(59, 130, 246)" />
-	</g>
 </g>
