@@ -59,7 +59,11 @@
 	});
 
 	function handleToolChange(value: string | undefined) {
-		if (!value) return;
+		if (!value) {
+			// User clicked to deselect current tool - switch back to select
+			onToolChange('select');
+			return;
+		}
 		const tool = value as Tool;
 		// Auto-enable shadows when switching to shadows tool
 		if (tool === 'shadows' && !sunSimulation.enabled) {
