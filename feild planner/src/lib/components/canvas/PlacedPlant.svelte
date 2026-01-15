@@ -16,9 +16,10 @@
 		onSelect: (id: Id<'placedPlants'>, shiftKey?: boolean) => void;
 		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) => void;
 		onMoveStart?: () => void; // Called once when drag begins (for history snapshot)
+		onMoveEnd?: () => void; // Called when drag ends (for clearing guides)
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, onSelect, onMove, onMoveStart }: Props = $props();
+	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
 
 	// Plant marker size (visual representation)
 	const markerRadius = 8;
@@ -63,6 +64,7 @@
 	function handlePointerUp(e: PointerEvent) {
 		isDragging = false;
 		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+		onMoveEnd?.();
 	}
 </script>
 

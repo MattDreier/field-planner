@@ -2,20 +2,18 @@
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, Bed } from '$lib/types';
 	import { MousePointer2, Square, Circle, Trash2 } from 'lucide-svelte';
-	import { snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
 
 	interface Props {
 		currentTool: Tool;
 		hasSelection: boolean;
 		selectedBed: Bed | null;
-		snapIncrement: SnapIncrement;
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 		onRotateBed?: (id: string, rotation: number) => void;
 	}
 
-	let { currentTool, hasSelection, selectedBed, snapIncrement, onToolChange, onDelete, onResizeBed, onRotateBed }: Props = $props();
+	let { currentTool, hasSelection, selectedBed, onToolChange, onDelete, onResizeBed, onRotateBed }: Props = $props();
 
 	// Local input values for controlled inputs
 	let widthInput = $state('');
@@ -35,9 +33,8 @@
 		const target = e.target as HTMLInputElement;
 		const value = parseFloat(target.value);
 		if (!isNaN(value) && value >= 0.5 && selectedBed) {
-			const snappedValue = snapFeetToGrid(value, snapIncrement);
 			const height = selectedBed.shape === 'rectangle' ? selectedBed.heightFeet : undefined;
-			onResizeBed(selectedBed._id, snappedValue, height);
+			onResizeBed(selectedBed._id, value, height);
 		}
 	}
 
@@ -45,8 +42,7 @@
 		const target = e.target as HTMLInputElement;
 		const value = parseFloat(target.value);
 		if (!isNaN(value) && value >= 0.5 && selectedBed && selectedBed.shape === 'rectangle') {
-			const snappedValue = snapFeetToGrid(value, snapIncrement);
-			onResizeBed(selectedBed._id, selectedBed.widthFeet, snappedValue);
+			onResizeBed(selectedBed._id, selectedBed.widthFeet, value);
 		}
 	}
 

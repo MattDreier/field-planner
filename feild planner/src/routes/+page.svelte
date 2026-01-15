@@ -7,14 +7,12 @@
 	import MapControls from '$lib/components/layout/MapControls.svelte';
 	import CanvasSunControls from '$lib/components/canvas/CanvasSunControls.svelte';
 	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
-	import SnapControls from '$lib/components/layout/SnapControls.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2 } from 'lucide-svelte';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
-	import type { SnapIncrement } from '$lib/utils/snap';
 	import { untrack } from 'svelte';
 
 	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
@@ -49,9 +47,6 @@
 	// Derived: backwards-compatible single selection (for components that need it)
 	const selectedBedId = $derived(selectedBedIds.size === 1 ? [...selectedBedIds][0] : null);
 	const selectedPlantId = $derived(selectedPlantIds.size === 1 ? [...selectedPlantIds][0] : null);
-
-	// Snapping state
-	let snapIncrement = $state<SnapIncrement>(0);
 
 	// Sun simulation state (default to zone 6b latitude ~40°N, current month)
 	let sunSimulation = $state<SunSimulationState>({
@@ -121,11 +116,6 @@
 	function handlePan(deltaX: number, deltaY: number) {
 		panX = panX + deltaX;
 		panY = panY + deltaY;
-	}
-
-	// Snap actions
-	function setSnapIncrement(increment: SnapIncrement) {
-		snapIncrement = increment;
 	}
 
 	// Selection handlers with multi-selection support
@@ -531,7 +521,6 @@
 				{beds}
 				{plants}
 			/>
-			<SnapControls {snapIncrement} onSnapChange={setSnapIncrement} />
 		</div>
 	</header>
 
@@ -543,7 +532,6 @@
 				currentTool={currentTool}
 				hasSelection={!!selectedBedId || !!selectedPlantId}
 				{selectedBed}
-				{snapIncrement}
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
@@ -572,7 +560,6 @@
 				{selectedBedIds}
 				{selectedPlantIds}
 				{dragSource}
-				{snapIncrement}
 				{sunSimulation}
 				onSelectBed={selectBed}
 				onSelectPlant={selectPlant}
