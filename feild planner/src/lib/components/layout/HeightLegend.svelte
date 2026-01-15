@@ -20,10 +20,10 @@
 		</p>
 	{:else}
 		<div class="flex items-center gap-2">
-			<!-- Gradient bar -->
+			<!-- Gradient bar using OKLch for perceptually uniform colors -->
 			<div
 				class="h-4 flex-1 rounded"
-				style="background: linear-gradient(to right, hsl(240, 70%, 50%), hsl(180, 70%, 50%), hsl(120, 70%, 50%), hsl(60, 70%, 50%), hsl(0, 70%, 50%))"
+				style="background: linear-gradient(to right in oklch, oklch(0.68 0.14 260), oklch(0.68 0.14 30))"
 			></div>
 		</div>
 
