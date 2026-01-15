@@ -2,7 +2,7 @@
 	import { ToggleGroup } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, Bed, SunSimulationState } from '$lib/types';
-	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin } from 'lucide-svelte';
+	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
 	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
 
 	interface Props {
@@ -10,11 +10,14 @@
 		hasSelection: boolean;
 		selectedBed: Bed | null;
 		sunSimulation: SunSimulationState;
+		snapEnabled?: boolean;
+		snapTemporarilyDisabled?: boolean; // True when Alt/Option is held during drag
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 		onRotateBed?: (id: string, rotation: number) => void;
 		onUpdateSunSimulation: (state: Partial<SunSimulationState>) => void;
+		onToggleSnap?: () => void;
 	}
 
 	let {
@@ -22,11 +25,14 @@
 		hasSelection,
 		selectedBed,
 		sunSimulation,
+		snapEnabled = true,
+		snapTemporarilyDisabled = false,
 		onToolChange,
 		onDelete,
 		onResizeBed,
 		onRotateBed,
-		onUpdateSunSimulation
+		onUpdateSunSimulation,
+		onToggleSnap
 	}: Props = $props();
 
 	// Bed property inputs
@@ -147,44 +153,57 @@
 	<h3 class="font-semibold text-lg mb-3">Tools</h3>
 
 	<!-- Icon-only toolbar (Figma style) -->
-	<ToggleGroup.Root
-		type="single"
-		value={currentTool}
-		onValueChange={handleToolChange}
-		class="inline-flex rounded-lg bg-muted p-1 gap-1"
-	>
-		<ToggleGroup.Item
-			value="select"
-			title="Select (V)"
-			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+	<div class="flex items-center gap-2">
+		<ToggleGroup.Root
+			type="single"
+			value={currentTool}
+			onValueChange={handleToolChange}
+			class="inline-flex rounded-lg bg-muted p-1 gap-1"
 		>
-			<MousePointer2 class="w-4 h-4" />
-		</ToggleGroup.Item>
+			<ToggleGroup.Item
+				value="select"
+				title="Select (V)"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+			>
+				<MousePointer2 class="w-4 h-4" />
+			</ToggleGroup.Item>
 
-		<ToggleGroup.Item
-			value="rectangle"
-			title="Rectangle Bed (R)"
-			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
-		>
-			<Square class="w-4 h-4" />
-		</ToggleGroup.Item>
+			<ToggleGroup.Item
+				value="rectangle"
+				title="Rectangle Bed (R)"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+			>
+				<Square class="w-4 h-4" />
+			</ToggleGroup.Item>
 
-		<ToggleGroup.Item
-			value="circle"
-			title="Circle Bed (C)"
-			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
-		>
-			<Circle class="w-4 h-4" />
-		</ToggleGroup.Item>
+			<ToggleGroup.Item
+				value="circle"
+				title="Circle Bed (C)"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+			>
+				<Circle class="w-4 h-4" />
+			</ToggleGroup.Item>
 
-		<ToggleGroup.Item
-			value="shadows"
-			title="Shadow Simulation"
-			class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm {sunSimulation.enabled && currentTool !== 'shadows' ? 'text-amber-500' : ''}"
-		>
-			<Sun class="w-4 h-4" />
-		</ToggleGroup.Item>
-	</ToggleGroup.Root>
+			<ToggleGroup.Item
+				value="shadows"
+				title="Shadow Simulation"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm {sunSimulation.enabled && currentTool !== 'shadows' ? 'text-amber-500' : ''}"
+			>
+				<Sun class="w-4 h-4" />
+			</ToggleGroup.Item>
+		</ToggleGroup.Root>
+
+		<!-- Snap toggle (separate from tool selection) -->
+		{#if onToggleSnap}
+			<button
+				onclick={onToggleSnap}
+				title={snapEnabled ? 'Snap ON (S to toggle, hold Alt to disable temporarily)' : 'Snap OFF (S to toggle, hold Alt to enable temporarily)'}
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors {snapEnabled && !snapTemporarilyDisabled ? 'bg-foreground text-background hover:bg-foreground/90' : snapTemporarilyDisabled ? 'bg-zinc-400 text-zinc-100' : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'}"
+			>
+				<Magnet class="w-4 h-4" />
+			</button>
+		{/if}
+	</div>
 
 	<!-- Delete button (when selection exists) -->
 	{#if hasSelection}

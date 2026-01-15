@@ -35,6 +35,7 @@
 		zoom: number;
 		panX: number;
 		panY: number;
+		snapEnabled?: boolean;
 		tool: Tool;
 		beds: BedType[];
 		plants: PlacedPlantType[];
@@ -51,6 +52,7 @@
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
 		onMoveStart?: () => void; // Called once when a drag/resize begins (for history snapshot)
+		onSnapOverrideChange?: (active: boolean) => void; // Called when Alt key toggles snap override during drag
 		onPan: (deltaX: number, deltaY: number) => void;
 		onZoom: (newZoom: number, pivotX: number, pivotY: number) => void;
 	}
@@ -60,6 +62,7 @@
 		zoom,
 		panX,
 		panY,
+		snapEnabled = true,
 		tool,
 		beds,
 		plants,
@@ -76,6 +79,7 @@
 		onPlacePlant,
 		onMovePlant,
 		onMoveStart,
+		onSnapOverrideChange,
 		onPan,
 		onZoom
 	}: Props = $props();
@@ -85,8 +89,18 @@
 	let activeDiagonalGuides = $state<DiagonalGuide[]>([]);
 	let activeDistances = $state<DistanceIndicator[]>([]);
 
+	// Track snap override state (Alt key during drag)
+	let lastSnapOverride = $state(false);
+	function updateSnapOverride(disableSnap: boolean) {
+		if (disableSnap !== lastSnapOverride) {
+			lastSnapOverride = disableSnap;
+			onSnapOverrideChange?.(disableSnap);
+		}
+	}
+
 	// Snap threshold in pixels (converted to inches based on zoom)
-	const SNAP_THRESHOLD_PX = 8;
+	// Lower value = less aggressive snapping, easier to position freely
+	const SNAP_THRESHOLD_PX = 4;
 
 	// Selection distance calculation (for exactly 2 selected objects)
 	const selectionDistanceInfo = $derived.by((): { info: SelectionDistanceResult; secondObjectId: string; secondObjectType: 'bed' | 'plant' } | null => {
@@ -512,6 +526,8 @@
 		activeGuides = [];
 		activeDiagonalGuides = [];
 		activeDistances = [];
+		// Reset snap override state
+		updateSnapOverride(false);
 	}
 
 	// Get all bounding boxes for smart guide calculations (excluding dragged objects)
@@ -542,7 +558,7 @@
 	}
 
 	// Bed move handler - supports multi-selection drag with smart guides
-	function handleBedMove(id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>) {
+	function handleBedMove(id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>, disableSnap?: boolean) {
 		// Convert pixel delta to inches
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
 		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
@@ -575,20 +591,39 @@
 		const excludeIds = new Set([...idsToMove].map(String));
 		const otherBoxes = getAllBoundingBoxes(excludeIds);
 
-		// Calculate snap threshold in inches (based on zoom)
-		const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
+		// Calculate snap offset (or skip if Alt key disables snapping)
+		let snapOffsetX = 0;
+		let snapOffsetY = 0;
 
-		// Calculate smart guides
-		const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches);
+		// Alt key toggles snap behavior in either direction
+		// When snap is ON: Alt temporarily disables it
+		// When snap is OFF: Alt temporarily enables it
+		const skipSnap = snapEnabled === !!disableSnap;
 
-		// Update visual guides
-		activeGuides = result.guides;
-		activeDiagonalGuides = result.diagonalGuides;
-		activeDistances = result.distances;
+		// Notify parent of snap override state change (Alt key held)
+		updateSnapOverride(!!disableSnap);
 
-		// Calculate the snap offset (difference between proposed and snapped position)
-		const snapOffsetX = result.snappedX - proposedX;
-		const snapOffsetY = result.snappedY - proposedY;
+		if (skipSnap) {
+			// Clear guides when snapping is disabled
+			activeGuides = [];
+			activeDiagonalGuides = [];
+			activeDistances = [];
+		} else {
+			// Calculate snap threshold in inches (based on zoom)
+			const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
+
+			// Calculate smart guides
+			const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches);
+
+			// Update visual guides
+			activeGuides = result.guides;
+			activeDiagonalGuides = result.diagonalGuides;
+			activeDistances = result.distances;
+
+			// Calculate the snap offset (difference between proposed and snapped position)
+			snapOffsetX = result.snappedX - proposedX;
+			snapOffsetY = result.snappedY - proposedY;
+		}
 
 		// Move all selected beds with the same offset
 		for (const bedId of idsToMove) {
@@ -603,7 +638,7 @@
 	}
 
 	// Plant move handler - supports multi-selection drag with smart guides
-	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) {
+	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>, disableSnap?: boolean) {
 		// Convert pixel delta to inches (local bed coordinates)
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
 		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
@@ -637,23 +672,40 @@
 		const excludeIds = new Set([...idsToMove].map(String));
 		const otherBoxes = getAllBoundingBoxes(excludeIds);
 
-		// Calculate snap threshold in inches
-		const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
+		// Alt key toggles snap behavior in either direction
+		// When snap is ON: Alt temporarily disables it
+		// When snap is OFF: Alt temporarily enables it
+		let snapOffsetX = 0;
+		let snapOffsetY = 0;
+		const skipSnap = snapEnabled === !!disableSnap;
 
-		// Calculate smart guides (use center for plants)
-		const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches);
+		// Notify parent of snap override state change (Alt key held)
+		updateSnapOverride(!!disableSnap);
 
-		// Update visual guides
-		activeGuides = result.guides;
-		activeDiagonalGuides = result.diagonalGuides;
-		activeDistances = result.distances;
+		if (skipSnap) {
+			// Clear guides when snapping is disabled
+			activeGuides = [];
+			activeDiagonalGuides = [];
+			activeDistances = [];
+		} else {
+			// Calculate snap threshold in inches
+			const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
 
-		// Calculate snap offset (for circles, snappedX/Y is the center after snap)
-		// We need to convert back to the delta that should be applied
-		const snappedCenterX = result.snappedX + radius; // snappedX is left edge, add radius for center
-		const snappedCenterY = result.snappedY + radius; // snappedY is top edge, add radius for center
-		const snapOffsetX = snappedCenterX - proposedFieldX;
-		const snapOffsetY = snappedCenterY - proposedFieldY;
+			// Calculate smart guides (center-only for plants - they're circles)
+			const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches, { centerOnly: true });
+
+			// Update visual guides
+			activeGuides = result.guides;
+			activeDiagonalGuides = result.diagonalGuides;
+			activeDistances = result.distances;
+
+			// Calculate snap offset (for circles, snappedX/Y is the center after snap)
+			// We need to convert back to the delta that should be applied
+			const snappedCenterX = result.snappedX + radius; // snappedX is left edge, add radius for center
+			const snappedCenterY = result.snappedY + radius; // snappedY is top edge, add radius for center
+			snapOffsetX = snappedCenterX - proposedFieldX;
+			snapOffsetY = snappedCenterY - proposedFieldY;
+		}
 
 		// Move all selected plants with the same offset
 		for (const plantId of idsToMove) {

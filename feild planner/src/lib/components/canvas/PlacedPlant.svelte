@@ -23,7 +23,7 @@
 		selectedPlantIds: Set<Id<'placedPlants'>>; // All selected plants for multi-drag
 		phaseInfo?: PhaseInfo; // Current lifecycle phase info
 		onSelect: (id: Id<'placedPlants'>, shiftKey?: boolean) => void;
-		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) => void;
+		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>, disableSnap?: boolean) => void;
 		onMoveStart?: () => void; // Called once when drag begins (for history snapshot)
 		onMoveEnd?: () => void; // Called when drag ends (for clearing guides)
 	}
@@ -95,7 +95,8 @@
 			const deltaX = e.clientX - dragStartX;
 			const deltaY = e.clientY - dragStartY;
 			// Pass all selected plant IDs for multi-drag
-			onMove(plant._id, deltaX, deltaY, selectedPlantIds);
+			// Alt/Option key disables snapping for precise positioning
+			onMove(plant._id, deltaX, deltaY, selectedPlantIds, e.altKey);
 			dragStartX = e.clientX;
 			dragStartY = e.clientY;
 		}
@@ -127,6 +128,14 @@
 		onpointermove={handlePointerMove}
 		onpointerup={handlePointerUp}
 	>
+		<!-- Invisible hit area for easier grabbing (44px diameter for touch-friendly target) -->
+		<circle
+			cx={cx}
+			cy={cy}
+			r={22}
+			fill="transparent"
+			class="pointer-events-auto"
+		/>
 		<!-- Phase-specific Lucide icon (scaled from 24x24 to ~16px, centered at origin) -->
 		<g
 			transform="translate({cx}, {cy})"

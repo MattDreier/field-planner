@@ -31,6 +31,8 @@
 	let zoom = $state(1.0);
 	let panX = $state(0);
 	let panY = $state(0);
+	let snapEnabled = $state(true);
+	let snapTemporarilyDisabled = $state(false); // True when Alt/Option is held during drag
 	const pixelsPerInch = 12;
 
 	// Selection and tool state
@@ -524,6 +526,12 @@
 			togglePanel();
 		}
 
+		// Toggle snap alignment with 'S'
+		if (e.key === 's' || e.key === 'S') {
+			e.preventDefault();
+			snapEnabled = !snapEnabled;
+		}
+
 		// Copy: Cmd/Ctrl+C
 		if (modKey && e.key === 'c') {
 			e.preventDefault();
@@ -636,11 +644,14 @@
 				hasSelection={!!selectedBedId || !!selectedPlantId}
 				{selectedBed}
 				{sunSimulation}
+				{snapEnabled}
+				{snapTemporarilyDisabled}
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
 				onUpdateSunSimulation={handleUpdateSunSimulation}
+				onToggleSnap={() => snapEnabled = !snapEnabled}
 			/>
 
 			<div class="flex-1 overflow-hidden">
@@ -659,6 +670,7 @@
 				{zoom}
 				{panX}
 				{panY}
+				{snapEnabled}
 				tool={currentTool}
 				{beds}
 				{plants}
@@ -675,6 +687,7 @@
 				onPlacePlant={handlePlacePlant}
 				onMovePlant={handleMovePlant}
 				onMoveStart={handleMoveStart}
+				onSnapOverrideChange={(active) => snapTemporarilyDisabled = active}
 				onPan={handlePan}
 				onZoom={handleZoomWithPivot}
 			/>
