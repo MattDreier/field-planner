@@ -62,6 +62,9 @@ export interface DistanceIndicator {
 	to: number; // field inches (end of gap)
 	labelPosition: number; // perpendicular position for label placement
 	distance: number; // gap in inches
+	// Optional: for rotated distances, use these instead of axis-aligned from/to
+	startPoint?: Point;
+	endPoint?: Point;
 }
 
 export interface SmartGuideResult {
@@ -599,6 +602,33 @@ function calculateVerticalDistance(
 	};
 }
 
+/**
+ * Calculate distance between two rotated boxes using edge-to-edge measurement
+ * Returns null if boxes have different rotations or overlap
+ */
+function calculateRotatedDistance(
+	draggingBox: BoundingBox,
+	targetBox: BoundingBox
+): DistanceIndicator | null {
+	const result = findClosestParallelEdges(draggingBox, targetBox);
+	if (!result || result.distance <= 0) return null;
+
+	// Determine primary axis based on line direction
+	const dx = result.point2.x - result.point1.x;
+	const dy = result.point2.y - result.point1.y;
+	const axis: 'x' | 'y' = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+
+	return {
+		axis,
+		from: axis === 'x' ? result.point1.x : result.point1.y,
+		to: axis === 'x' ? result.point2.x : result.point2.y,
+		labelPosition: axis === 'x' ? (result.point1.y + result.point2.y) / 2 : (result.point1.x + result.point2.x) / 2,
+		distance: result.distance,
+		startPoint: result.point1,
+		endPoint: result.point2
+	};
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Main Entry Point
 // ─────────────────────────────────────────────────────────────────────────────
@@ -729,15 +759,26 @@ export function calculateSmartGuides(
 	for (const targetBox of allBoxes) {
 		if (targetBox.id === draggingBox.id) continue;
 
-		const hDist = calculateHorizontalDistance(snappedBox, targetBox);
-		if (hDist && hDist.distance < 120) {
-			// Only show distances < 10 feet
-			distances.push(hDist);
-		}
+		const hasRotation = (snappedBox.rotation ?? 0) !== 0 || (targetBox.rotation ?? 0) !== 0;
 
-		const vDist = calculateVerticalDistance(snappedBox, targetBox);
-		if (vDist && vDist.distance < 120) {
-			distances.push(vDist);
+		if (hasRotation) {
+			// Use rotation-aware distance calculation
+			const rotDist = calculateRotatedDistance(snappedBox, targetBox);
+			if (rotDist && rotDist.distance < 120) {
+				distances.push(rotDist);
+			}
+		} else {
+			// Use axis-aligned distance calculation for non-rotated objects
+			const hDist = calculateHorizontalDistance(snappedBox, targetBox);
+			if (hDist && hDist.distance < 120) {
+				// Only show distances < 10 feet
+				distances.push(hDist);
+			}
+
+			const vDist = calculateVerticalDistance(snappedBox, targetBox);
+			if (vDist && vDist.distance < 120) {
+				distances.push(vDist);
+			}
 		}
 	}
 
@@ -783,23 +824,254 @@ export function formatDistance(inches: number): string {
 
 export interface SelectionDistanceResult {
 	distance: number; // edge-to-edge distance in inches
-	axis: 'x' | 'y'; // primary axis of separation
+	axis: 'x' | 'y'; // primary axis of separation (for axis-aligned) or closest to perpendicular
 	// Line endpoints in field coordinates
 	lineStart: { x: number; y: number };
 	lineEnd: { x: number; y: number };
 	// Direction vector (normalized) from box1 to box2
 	direction: { x: number; y: number };
+	// Optional angle for rotated measurements (degrees)
+	angle?: number;
+}
+
+/**
+ * Project a point onto a line segment and clamp to segment bounds
+ * Returns the closest point on the segment to the given point
+ */
+function projectPointOntoSegment(point: Point, segStart: Point, segEnd: Point): Point {
+	const dx = segEnd.x - segStart.x;
+	const dy = segEnd.y - segStart.y;
+	const lengthSq = dx * dx + dy * dy;
+
+	if (lengthSq === 0) return segStart;
+
+	// Parameter t represents position along segment (0 = start, 1 = end)
+	const t = Math.max(0, Math.min(1,
+		((point.x - segStart.x) * dx + (point.y - segStart.y) * dy) / lengthSq
+	));
+
+	return {
+		x: segStart.x + t * dx,
+		y: segStart.y + t * dy
+	};
+}
+
+/**
+ * Calculate the minimum distance between two line segments and the closest points.
+ * For parallel segments, finds the perpendicular connection in the overlap region.
+ */
+function segmentToSegmentDistance(
+	e1: RotatedEdge,
+	e2: RotatedEdge
+): { distance: number; point1: Point; point2: Point } {
+	// Direction of e1
+	const d1x = e1.end.x - e1.start.x;
+	const d1y = e1.end.y - e1.start.y;
+	const len1 = Math.sqrt(d1x * d1x + d1y * d1y);
+
+	if (len1 === 0) {
+		// e1 is a point, find closest point on e2
+		const p = projectPointOntoSegment(e1.start, e2.start, e2.end);
+		const dx = p.x - e1.start.x;
+		const dy = p.y - e1.start.y;
+		return { distance: Math.sqrt(dx * dx + dy * dy), point1: e1.start, point2: p };
+	}
+
+	const dir1 = { x: d1x / len1, y: d1y / len1 };
+	const perp1 = { x: -dir1.y, y: dir1.x }; // perpendicular (normal)
+
+	// Project e2 endpoints onto e1's coordinate system
+	// t = position along e1's direction, s = perpendicular distance
+	const e2StartT = (e2.start.x - e1.start.x) * dir1.x + (e2.start.y - e1.start.y) * dir1.y;
+	const e2EndT = (e2.end.x - e1.start.x) * dir1.x + (e2.end.y - e1.start.y) * dir1.y;
+	const e2StartS = (e2.start.x - e1.start.x) * perp1.x + (e2.start.y - e1.start.y) * perp1.y;
+	const e2EndS = (e2.end.x - e1.start.x) * perp1.x + (e2.end.y - e1.start.y) * perp1.y;
+
+	// For parallel edges, e2StartS ≈ e2EndS (same perpendicular distance)
+	const perpDist = Math.abs((e2StartS + e2EndS) / 2);
+
+	// Find overlap in t direction
+	const e1TMin = 0;
+	const e1TMax = len1;
+	const e2TMin = Math.min(e2StartT, e2EndT);
+	const e2TMax = Math.max(e2StartT, e2EndT);
+
+	const overlapMin = Math.max(e1TMin, e2TMin);
+	const overlapMax = Math.min(e1TMax, e2TMax);
+
+	if (overlapMin <= overlapMax) {
+		// Edges overlap - draw perpendicular at center of overlap
+		const t = (overlapMin + overlapMax) / 2;
+		const point1: Point = {
+			x: e1.start.x + dir1.x * t,
+			y: e1.start.y + dir1.y * t
+		};
+		// Move perpendicular to e2
+		const sign = e2StartS >= 0 ? 1 : -1;
+		const point2: Point = {
+			x: point1.x + perp1.x * perpDist * sign,
+			y: point1.y + perp1.y * perpDist * sign
+		};
+		return { distance: perpDist, point1, point2 };
+	}
+
+	// No overlap - find closest endpoints
+	// Check all 4 endpoint-to-segment combinations
+	const candidates: Array<{ distance: number; point1: Point; point2: Point }> = [];
+
+	// e1.start to e2
+	const p1 = projectPointOntoSegment(e1.start, e2.start, e2.end);
+	let dx = p1.x - e1.start.x;
+	let dy = p1.y - e1.start.y;
+	candidates.push({ distance: Math.sqrt(dx * dx + dy * dy), point1: e1.start, point2: p1 });
+
+	// e1.end to e2
+	const p2 = projectPointOntoSegment(e1.end, e2.start, e2.end);
+	dx = p2.x - e1.end.x;
+	dy = p2.y - e1.end.y;
+	candidates.push({ distance: Math.sqrt(dx * dx + dy * dy), point1: e1.end, point2: p2 });
+
+	// e2.start to e1
+	const p3 = projectPointOntoSegment(e2.start, e1.start, e1.end);
+	dx = e2.start.x - p3.x;
+	dy = e2.start.y - p3.y;
+	candidates.push({ distance: Math.sqrt(dx * dx + dy * dy), point1: p3, point2: e2.start });
+
+	// e2.end to e1
+	const p4 = projectPointOntoSegment(e2.end, e1.start, e1.end);
+	dx = e2.end.x - p4.x;
+	dy = e2.end.y - p4.y;
+	candidates.push({ distance: Math.sqrt(dx * dx + dy * dy), point1: p4, point2: e2.end });
+
+	// Return the minimum
+	candidates.sort((a, b) => a.distance - b.distance);
+	return candidates[0];
+}
+
+/**
+ * Find the closest pair of parallel edges between two boxes
+ * Returns null if no parallel edges exist (different rotation angles)
+ */
+function findClosestParallelEdges(
+	box1: BoundingBox,
+	box2: BoundingBox
+): {
+	edge1: RotatedEdge;
+	edge2: RotatedEdge;
+	distance: number;
+	point1: Point;
+	point2: Point;
+} | null {
+	const rotation1 = box1.rotation ?? 0;
+	const rotation2 = box2.rotation ?? 0;
+
+	// Check if rotations are compatible (same angle, so edges are parallel)
+	if (!anglesMatch(rotation1, rotation2)) {
+		return null;
+	}
+
+	const edges1 = getRotatedEdges(box1);
+	const edges2 = getRotatedEdges(box2);
+
+	let bestMatch: {
+		edge1: RotatedEdge;
+		edge2: RotatedEdge;
+		distance: number;
+		point1: Point;
+		point2: Point;
+	} | null = null;
+
+	for (const e1 of edges1) {
+		for (const e2 of edges2) {
+			// Only consider parallel edges
+			if (!anglesMatch(e1.angle, e2.angle)) continue;
+
+			// Check if edges face each other
+			const mid1: Point = {
+				x: (e1.start.x + e1.end.x) / 2,
+				y: (e1.start.y + e1.end.y) / 2
+			};
+			const mid2: Point = {
+				x: (e2.start.x + e2.end.x) / 2,
+				y: (e2.start.y + e2.end.y) / 2
+			};
+
+			// Vector from e1 midpoint to e2 midpoint
+			const toOther = { x: mid2.x - mid1.x, y: mid2.y - mid1.y };
+
+			// Edge normal (perpendicular to edge direction)
+			const edgeDir = { x: e1.end.x - e1.start.x, y: e1.end.y - e1.start.y };
+			const edgeLen = Math.sqrt(edgeDir.x * edgeDir.x + edgeDir.y * edgeDir.y);
+			if (edgeLen === 0) continue;
+
+			const normal = { x: -edgeDir.y / edgeLen, y: edgeDir.x / edgeLen };
+
+			// Dot product with normal tells us if other box is "in front" of this edge
+			const dot = toOther.x * normal.x + toOther.y * normal.y;
+
+			// Skip if edges face same direction (backs of shapes)
+			if (dot <= 0) continue;
+
+			// Calculate segment-to-segment distance with proper connection points
+			const result = segmentToSegmentDistance(e1, e2);
+
+			if (!bestMatch || result.distance < bestMatch.distance) {
+				bestMatch = {
+					edge1: e1,
+					edge2: e2,
+					distance: result.distance,
+					point1: result.point1,
+					point2: result.point2
+				};
+			}
+		}
+	}
+
+	return bestMatch;
 }
 
 /**
  * Calculate edge-to-edge distance between two bounding boxes
- * Returns the shortest gap distance and the connection line for rendering
+ * For rotated boxes, finds closest parallel edges and measures perpendicular distance.
+ * Returns null if boxes have incompatible rotations or overlap.
  */
 export function calculateSelectionDistance(
 	box1: BoundingBox,
 	box2: BoundingBox
 ): SelectionDistanceResult | null {
-	// Calculate horizontal and vertical gaps
+	const rotation1 = box1.rotation ?? 0;
+	const rotation2 = box2.rotation ?? 0;
+	const hasRotation = rotation1 !== 0 || rotation2 !== 0;
+
+	// Try rotation-aware edge matching first
+	if (hasRotation) {
+		const edgeMatch = findClosestParallelEdges(box1, box2);
+		if (edgeMatch) {
+			// Calculate direction from point1 to point2 (normalized)
+			const dx = edgeMatch.point2.x - edgeMatch.point1.x;
+			const dy = edgeMatch.point2.y - edgeMatch.point1.y;
+			const len = Math.sqrt(dx * dx + dy * dy);
+			const direction = len > 0
+				? { x: dx / len, y: dy / len }
+				: { x: 0, y: 1 };
+
+			// Determine axis based on direction angle
+			const axis: 'x' | 'y' = Math.abs(direction.x) > Math.abs(direction.y) ? 'x' : 'y';
+
+			return {
+				distance: edgeMatch.distance,
+				axis,
+				lineStart: edgeMatch.point1,
+				lineEnd: edgeMatch.point2,
+				direction,
+				angle: edgeMatch.edge1.angle
+			};
+		}
+		// Incompatible rotations - no measurement possible
+		return null;
+	}
+
+	// Axis-aligned fallback (original logic for non-rotated boxes)
 	let hGap = 0;
 	let vGap = 0;
 

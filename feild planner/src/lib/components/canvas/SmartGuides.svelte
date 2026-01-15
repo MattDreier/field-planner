@@ -74,7 +74,73 @@
 <!-- Distance Indicators -->
 {#each distances as dist, i (dist.axis + dist.from + dist.to + i)}
 	{@const formattedDist = formatDistance(dist.distance)}
-	{#if dist.axis === 'x'}
+	{#if dist.startPoint && dist.endPoint}
+		<!-- Rotated distance (using actual edge points) -->
+		{@const startPx = fieldToCanvas(dist.startPoint.x, dist.startPoint.y, canvasState)}
+		{@const endPx = fieldToCanvas(dist.endPoint.x, dist.endPoint.y, canvasState)}
+		{@const midX = (startPx.x + endPx.x) / 2}
+		{@const midY = (startPx.y + endPx.y) / 2}
+		{@const dx = endPx.x - startPx.x}
+		{@const dy = endPx.y - startPx.y}
+		{@const len = Math.sqrt(dx * dx + dy * dy) || 1}
+		{@const perpX = -dy / len}
+		{@const perpY = dx / len}
+		{@const capSize = 4}
+
+		<!-- Distance line -->
+		<line
+			x1={startPx.x}
+			y1={startPx.y}
+			x2={endPx.x}
+			y2={endPx.y}
+			stroke={guideColor}
+			stroke-width={1}
+			class="pointer-events-none"
+		/>
+		<!-- End caps (perpendicular to line) -->
+		<line
+			x1={startPx.x - perpX * capSize}
+			y1={startPx.y - perpY * capSize}
+			x2={startPx.x + perpX * capSize}
+			y2={startPx.y + perpY * capSize}
+			stroke={guideColor}
+			stroke-width={1}
+			class="pointer-events-none"
+		/>
+		<line
+			x1={endPx.x - perpX * capSize}
+			y1={endPx.y - perpY * capSize}
+			x2={endPx.x + perpX * capSize}
+			y2={endPx.y + perpY * capSize}
+			stroke={guideColor}
+			stroke-width={1}
+			class="pointer-events-none"
+		/>
+		<!-- Label background -->
+		<rect
+			x={midX - 20}
+			y={midY - labelFontSize / 2 - labelPadding}
+			width={40}
+			height={labelFontSize + labelPadding * 2}
+			rx={4}
+			fill={labelBg}
+			stroke={guideColor}
+			stroke-width={1}
+			class="pointer-events-none"
+		/>
+		<!-- Label text -->
+		<text
+			x={midX}
+			y={midY + labelFontSize / 3}
+			text-anchor="middle"
+			fill={labelColor}
+			font-size={labelFontSize}
+			font-weight="500"
+			class="pointer-events-none"
+		>
+			{formattedDist}
+		</text>
+	{:else if dist.axis === 'x'}
 		<!-- Horizontal distance (gap between objects side by side) -->
 		{@const startX = fieldToCanvas(dist.from, 0, canvasState).x}
 		{@const endX = fieldToCanvas(dist.to, 0, canvasState).x}

@@ -18,6 +18,17 @@
 	const inputX = $derived((startPx.x + endPx.x) / 2);
 	const inputY = $derived((startPx.y + endPx.y) / 2);
 
+	// Calculate perpendicular direction for end caps (works for any angle)
+	const capSize = 8; // pixels
+	const perpDir = $derived.by(() => {
+		const dx = endPx.x - startPx.x;
+		const dy = endPx.y - startPx.y;
+		const len = Math.sqrt(dx * dx + dy * dy);
+		if (len === 0) return { x: 0, y: 1 };
+		// Perpendicular is (-dy, dx) normalized
+		return { x: -dy / len, y: dx / len };
+	});
+
 	// Local state for input
 	let inputValue = $state('');
 	let isEditing = $state(false);
@@ -108,44 +119,23 @@
 		stroke-width={lineWidth}
 	/>
 
-	<!-- End caps -->
-	{#if distanceInfo.axis === 'x'}
-		<!-- Vertical end caps for horizontal distance -->
-		<line
-			x1={startPx.x}
-			y1={startPx.y - 8}
-			x2={startPx.x}
-			y2={startPx.y + 8}
-			stroke={lineColor}
-			stroke-width={lineWidth}
-		/>
-		<line
-			x1={endPx.x}
-			y1={endPx.y - 8}
-			x2={endPx.x}
-			y2={endPx.y + 8}
-			stroke={lineColor}
-			stroke-width={lineWidth}
-		/>
-	{:else}
-		<!-- Horizontal end caps for vertical distance -->
-		<line
-			x1={startPx.x - 8}
-			y1={startPx.y}
-			x2={startPx.x + 8}
-			y2={startPx.y}
-			stroke={lineColor}
-			stroke-width={lineWidth}
-		/>
-		<line
-			x1={endPx.x - 8}
-			y1={endPx.y}
-			x2={endPx.x + 8}
-			y2={endPx.y}
-			stroke={lineColor}
-			stroke-width={lineWidth}
-		/>
-	{/if}
+	<!-- End caps (perpendicular to line direction) -->
+	<line
+		x1={startPx.x - perpDir.x * capSize}
+		y1={startPx.y - perpDir.y * capSize}
+		x2={startPx.x + perpDir.x * capSize}
+		y2={startPx.y + perpDir.y * capSize}
+		stroke={lineColor}
+		stroke-width={lineWidth}
+	/>
+	<line
+		x1={endPx.x - perpDir.x * capSize}
+		y1={endPx.y - perpDir.y * capSize}
+		x2={endPx.x + perpDir.x * capSize}
+		y2={endPx.y + perpDir.y * capSize}
+		stroke={lineColor}
+		stroke-width={lineWidth}
+	/>
 </g>
 
 <!-- Input overlay (using foreignObject for HTML input inside SVG) -->
