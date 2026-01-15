@@ -80,6 +80,9 @@ export interface PlannedPlant {
 	status: 'planned' | 'started' | 'transplanted' | 'harvesting' | 'complete';
 	notes?: string;
 	createdAt: number;
+	// Position within bed (inches) - if undefined, auto-center in bed
+	x?: number;
+	y?: number;
 }
 
 // Garden settings for timeline calculations

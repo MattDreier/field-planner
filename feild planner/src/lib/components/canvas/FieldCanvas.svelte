@@ -24,7 +24,11 @@
 	} from '$lib/utils/smartGuides';
 	import { calculateSunPosition } from '$lib/utils/sun';
 	import { calculateAllShadows, detectShadedPlants } from '$lib/utils/shadow';
+	import { calculateLifecyclePhases, getPlantVisibilityAtDate, type LifecyclePhase, type PlantVisibility } from '$lib/utils/timeline';
+	import { timelineState, updatePlannedPlantPosition } from '$lib/stores/timeline.svelte';
+	import { getFlowerById, type FlowerData } from '$lib/data/flowers';
 	import type { Id } from '../../../convex/_generated/dataModel';
+	import type { PlannedPlant, PlantingDates } from '$lib/types';
 
 	interface Props {
 		pixelsPerInch: number;
@@ -211,11 +215,30 @@
 		onZoom(newZoom, pivotFieldX, pivotFieldY);
 	}
 
-	// Compute plant positions with absolute coordinates
+	// Current view date for filtering plants
+	const currentViewDate = $derived(new Date(timelineState.currentViewDate + 'T12:00:00'));
+
+	// Compute plant positions with absolute coordinates and visibility filtering
 	const plantsWithPositions = $derived.by(() => {
 		return plants.map((plant) => {
 			const bed = beds.find((b) => b._id === plant.bedId);
 			if (!bed) return null;
+
+			// Calculate visibility based on current timeline date
+			let visibility: PlantVisibility = { isVisible: true, currentPhase: null, phaseLabel: null, phaseColor: null, phaseProgress: 0 };
+
+			if (plant.plantingDates) {
+				const flowerData = getFlowerById(plant.flowerId);
+				if (flowerData) {
+					const phases = calculateLifecyclePhases(plant.plantingDates, flowerData);
+					visibility = getPlantVisibilityAtDate(phases, currentViewDate);
+				}
+			}
+
+			// Filter out plants that aren't visible at current date
+			if (!visibility.isVisible && plant.plantingDates) {
+				return null;
+			}
 
 			const absolutePos = bedLocalToField(plant.x, plant.y, bed);
 			const canvasPos = fieldToCanvas(absolutePos.x, absolutePos.y, canvasState);
@@ -227,9 +250,81 @@
 				absoluteY: absolutePos.y,
 				canvasX: canvasPos.x,
 				canvasY: canvasPos.y,
-				spacingRadiusPixels
+				spacingRadiusPixels,
+				visibility
 			};
-		}).filter(Boolean) as Array<PlacedPlantType & { absoluteX: number; absoluteY: number; canvasX: number; canvasY: number; spacingRadiusPixels: number }>;
+		}).filter(Boolean) as Array<PlacedPlantType & {
+			absoluteX: number;
+			absoluteY: number;
+			canvasX: number;
+			canvasY: number;
+			spacingRadiusPixels: number;
+			visibility: PlantVisibility;
+		}>;
+	});
+
+	// Compute planned plant positions (auto-positioned at bed center)
+	const plannedPlantsWithPositions = $derived.by(() => {
+		return timelineState.plannedPlants
+			.map((planned) => {
+				const bed = beds.find((b) => b._id === planned.bedId);
+				if (!bed) return null;
+
+				// Get flower data for spacing and visibility calculations
+				const flowerData = getFlowerById(planned.flowerId);
+				if (!flowerData) return null;
+
+				// Calculate visibility based on current timeline date
+				let visibility: PlantVisibility = { isVisible: true, currentPhase: null, phaseLabel: null, phaseColor: null, phaseProgress: 0 };
+
+				if (planned.plantingDates) {
+					const phases = calculateLifecyclePhases(planned.plantingDates, flowerData);
+					visibility = getPlantVisibilityAtDate(phases, currentViewDate);
+				}
+
+				// Filter out plants that aren't visible at current date
+				if (!visibility.isVisible) {
+					return null;
+				}
+
+				// Use stored position if available, otherwise auto-center in bed
+				const bedDims = getBedDimensionsInInches(bed);
+				const localX = planned.x ?? bedDims.width / 2;
+				const localY = planned.y ?? bedDims.height / 2;
+
+				// Convert to absolute field coordinates
+				const absolutePos = bedLocalToField(localX, localY, bed);
+				const canvasPos = fieldToCanvas(absolutePos.x, absolutePos.y, canvasState);
+				const spacingRadiusPixels = (flowerData.spacingMin / 2) * pixelsPerInch * zoom;
+
+				return {
+					...planned,
+					flowerData,
+					bed,
+					localX,
+					localY,
+					absoluteX: absolutePos.x,
+					absoluteY: absolutePos.y,
+					canvasX: canvasPos.x,
+					canvasY: canvasPos.y,
+					spacingRadiusPixels,
+					visibility
+				};
+			})
+			.filter(Boolean) as Array<
+				PlannedPlant & {
+					flowerData: FlowerData;
+					bed: BedType;
+					localX: number;
+					localY: number;
+					absoluteX: number;
+					absoluteY: number;
+					canvasX: number;
+					canvasY: number;
+					spacingRadiusPixels: number;
+					visibility: PlantVisibility;
+				}
+			>;
 	});
 
 	// Detect spacing conflicts
@@ -569,6 +664,34 @@
 			onMovePlant(plantId, newX, newY);
 		}
 	}
+
+	// Planned plant move handler
+	function handlePlannedPlantMove(
+		id: Id<'plannedPlants'>,
+		deltaX: number,
+		deltaY: number,
+		planned: PlannedPlant & { bed: BedType; localX: number; localY: number }
+	) {
+		// Convert pixel delta to inches
+		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
+		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
+
+		// Calculate new local position within bed
+		const newX = planned.localX + deltaInchesX;
+		const newY = planned.localY + deltaInchesY;
+
+		// Clamp to bed bounds
+		const bedDims = getBedDimensionsInInches(planned.bed);
+		const clampedX = Math.max(0, Math.min(bedDims.width, newX));
+		const clampedY = Math.max(0, Math.min(bedDims.height, newY));
+
+		updatePlannedPlantPosition(id, clampedX, clampedY);
+	}
+
+	// Drag state for planned plants
+	let draggingPlannedId = $state<Id<'plannedPlants'> | null>(null);
+	let plannedDragStartX = $state(0);
+	let plannedDragStartY = $state(0);
 </script>
 
 <svg
@@ -584,6 +707,14 @@
 	role="application"
 	aria-label="Garden field planner canvas"
 >
+	<!-- SVG filter definitions -->
+	<defs>
+		<!-- Glow effect for selected plant icons -->
+		<filter id="selected-glow" x="-50%" y="-50%" width="200%" height="200%">
+			<feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="white" flood-opacity="0.8"/>
+		</filter>
+	</defs>
+
 	<!-- Grid background (fills viewport, offset by pan) -->
 	<GridBackground
 		width={viewportWidth}
@@ -636,11 +767,106 @@
 			isShaded={shadedPlants.has(plant._id)}
 			isSelected={selectedPlantIds.has(plant._id)}
 			{selectedPlantIds}
+			phaseInfo={plant.visibility.currentPhase ? {
+				currentPhase: plant.visibility.currentPhase,
+				phaseLabel: plant.visibility.phaseLabel,
+				phaseColor: plant.visibility.phaseColor,
+				phaseProgress: plant.visibility.phaseProgress
+			} : undefined}
 			onSelect={onSelectPlant}
 			onMove={handlePlantMove}
 			{onMoveStart}
 			onMoveEnd={handleMoveEnd}
 		/>
+	{/each}
+
+	<!-- Planned Plants (from succession planning, draggable) -->
+	{#each plannedPlantsWithPositions as planned (planned._id)}
+		{@const phaseColor = planned.visibility.phaseColor ?? 'hsl(200, 70%, 50%)'}
+		{@const isDragging = draggingPlannedId === planned._id}
+		<g
+			class="planned-plant cursor-move"
+			style="opacity: {isDragging ? 0.9 : 0.7};"
+			role="button"
+			tabindex="0"
+			onpointerdown={(e) => {
+				if (e.button !== 0) return;
+				draggingPlannedId = planned._id;
+				plannedDragStartX = e.clientX;
+				plannedDragStartY = e.clientY;
+				(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+				e.stopPropagation();
+			}}
+			onpointermove={(e) => {
+				if (draggingPlannedId !== planned._id) return;
+				const deltaX = e.clientX - plannedDragStartX;
+				const deltaY = e.clientY - plannedDragStartY;
+				handlePlannedPlantMove(planned._id, deltaX, deltaY, planned);
+				plannedDragStartX = e.clientX;
+				plannedDragStartY = e.clientY;
+			}}
+			onpointerup={(e) => {
+				draggingPlannedId = null;
+				(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+			}}
+			onkeydown={(e) => {
+				// Arrow key movement
+				const step = e.shiftKey ? 12 : 3; // 1 inch or 0.25 inch
+				if (e.key === 'ArrowLeft') handlePlannedPlantMove(planned._id, -step * pixelsPerInch * zoom, 0, planned);
+				if (e.key === 'ArrowRight') handlePlannedPlantMove(planned._id, step * pixelsPerInch * zoom, 0, planned);
+				if (e.key === 'ArrowUp') handlePlannedPlantMove(planned._id, 0, -step * pixelsPerInch * zoom, planned);
+				if (e.key === 'ArrowDown') handlePlannedPlantMove(planned._id, 0, step * pixelsPerInch * zoom, planned);
+			}}
+		>
+			<!-- Dashed spacing circle to indicate "planned" status -->
+			<circle
+				cx={planned.canvasX}
+				cy={planned.canvasY}
+				r={planned.spacingRadiusPixels}
+				fill={phaseColor}
+				fill-opacity="0.15"
+				stroke={phaseColor}
+				stroke-width={isDragging ? 3 : 2}
+				stroke-dasharray="6 4"
+			/>
+			<!-- Plant marker -->
+			<circle
+				cx={planned.canvasX}
+				cy={planned.canvasY}
+				r="6"
+				fill={phaseColor}
+				stroke="white"
+				stroke-width="2"
+			/>
+			<!-- "Planned" badge -->
+			<g transform="translate({planned.canvasX + planned.spacingRadiusPixels * 0.6}, {planned.canvasY - planned.spacingRadiusPixels * 0.6})">
+				<rect
+					x="-18"
+					y="-8"
+					width="36"
+					height="16"
+					rx="4"
+					fill="rgba(0,0,0,0.6)"
+				/>
+				<text
+					x="0"
+					y="4"
+					text-anchor="middle"
+					class="text-[9px] fill-white font-medium pointer-events-none"
+				>
+					Planned
+				</text>
+			</g>
+			<!-- Plant name label below -->
+			<text
+				x={planned.canvasX}
+				y={planned.canvasY + planned.spacingRadiusPixels + 14}
+				text-anchor="middle"
+				class="text-xs fill-muted-foreground font-medium pointer-events-none"
+			>
+				{planned.flowerData.name}
+			</text>
+		</g>
 	{/each}
 
 	<!-- Smart guides overlay (rendered on top during drag) -->
