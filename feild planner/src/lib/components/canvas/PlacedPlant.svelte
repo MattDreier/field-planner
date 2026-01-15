@@ -148,15 +148,6 @@
 					filter={isSelected ? 'url(#selected-glow)' : ''}
 					transform="translate(-9, -9) scale(0.75)"
 				>
-					<!-- White outline for contrast -->
-					<path
-						d={iconPath}
-						fill="none"
-						stroke="white"
-						stroke-width="4"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					/>
 					<!-- Colored icon -->
 					<path
 						d={iconPath}

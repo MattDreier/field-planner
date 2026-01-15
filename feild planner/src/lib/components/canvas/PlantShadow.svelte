@@ -33,6 +33,5 @@
 	rx={shadowWidth / 2}
 	ry={shadowLengthPixels / 2}
 	transform="rotate({shadowAngle}, {ellipseCenterX}, {ellipseCenterY})"
-	fill="rgba(0, 0, 0, 0.12)"
-	class="pointer-events-none"
+	class="pointer-events-none fill-black/12 dark:fill-white/20"
 />
