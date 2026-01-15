@@ -3,12 +3,25 @@
 	import Bed from './Bed.svelte';
 	import PlacedPlant from './PlacedPlant.svelte';
 	import ShadowLayer from './ShadowLayer.svelte';
+	import SmartGuides from './SmartGuides.svelte';
+	import SelectionDistance from './SelectionDistance.svelte';
 	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Tool, DragSource, SunSimulationState } from '$lib/types';
 	import { getBedDimensionsInInches } from '$lib/types';
 	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
 	import { calculateHeightColors } from '$lib/utils/color';
-	import { snapToGrid, snapFeetToGrid, type SnapIncrement } from '$lib/utils/snap';
+	import {
+		calculateSmartGuides,
+		calculateSelectionDistance,
+		getBedBoundingBox,
+		createBoundingBox,
+		createCircleBoundingBox,
+		type AlignmentGuide,
+		type DiagonalGuide,
+		type DistanceIndicator,
+		type BoundingBox,
+		type SelectionDistanceResult
+	} from '$lib/utils/smartGuides';
 	import { calculateSunPosition } from '$lib/utils/sun';
 	import { calculateAllShadows, detectShadedPlants } from '$lib/utils/shadow';
 	import type { Id } from '../../../convex/_generated/dataModel';
@@ -24,7 +37,6 @@
 		selectedBedIds: Set<Id<'beds'>>;
 		selectedPlantIds: Set<Id<'placedPlants'>>;
 		dragSource: DragSource;
-		snapIncrement: SnapIncrement;
 		sunSimulation: SunSimulationState;
 		onSelectBed: (id: Id<'beds'> | null, shiftKey?: boolean) => void;
 		onSelectPlant: (id: Id<'placedPlants'> | null, shiftKey?: boolean) => void;
@@ -50,7 +62,6 @@
 		selectedBedIds,
 		selectedPlantIds,
 		dragSource,
-		snapIncrement,
 		sunSimulation,
 		onSelectBed,
 		onSelectPlant,
@@ -64,6 +75,91 @@
 		onPan,
 		onZoom
 	}: Props = $props();
+
+	// Smart guides state
+	let activeGuides = $state<AlignmentGuide[]>([]);
+	let activeDiagonalGuides = $state<DiagonalGuide[]>([]);
+	let activeDistances = $state<DistanceIndicator[]>([]);
+
+	// Snap threshold in pixels (converted to inches based on zoom)
+	const SNAP_THRESHOLD_PX = 8;
+
+	// Selection distance calculation (for exactly 2 selected objects)
+	const selectionDistanceInfo = $derived.by((): { info: SelectionDistanceResult; secondObjectId: string; secondObjectType: 'bed' | 'plant' } | null => {
+		const totalSelected = selectedBedIds.size + selectedPlantIds.size;
+		if (totalSelected !== 2) return null;
+
+		// Gather selected objects with their bounding boxes
+		const selectedObjects: Array<{ id: string; type: 'bed' | 'plant'; box: BoundingBox }> = [];
+
+		for (const bedId of selectedBedIds) {
+			const bed = beds.find((b) => b._id === bedId);
+			if (bed) {
+				selectedObjects.push({
+					id: bedId,
+					type: 'bed',
+					box: getBedBoundingBox(bed)
+				});
+			}
+		}
+
+		for (const plantId of selectedPlantIds) {
+			const plant = plants.find((p) => p._id === plantId);
+			if (plant) {
+				const bed = beds.find((b) => b._id === plant.bedId);
+				if (bed) {
+					const fieldX = plant.x + bed.x;
+					const fieldY = plant.y + bed.y;
+					const radius = plant.spacingMin / 2;
+					selectedObjects.push({
+						id: plantId,
+						type: 'plant',
+						box: createCircleBoundingBox(plantId, fieldX, fieldY, radius)
+					});
+				}
+			}
+		}
+
+		if (selectedObjects.length !== 2) return null;
+
+		const distanceResult = calculateSelectionDistance(selectedObjects[0].box, selectedObjects[1].box);
+		if (!distanceResult) return null;
+
+		// The second object in selection order will be moved
+		return {
+			info: distanceResult,
+			secondObjectId: selectedObjects[1].id,
+			secondObjectType: selectedObjects[1].type
+		};
+	});
+
+	// Handle distance change from the selection overlay
+	function handleSelectionDistanceChange(newDistance: number) {
+		if (!selectionDistanceInfo) return;
+
+		const { info, secondObjectId, secondObjectType } = selectionDistanceInfo;
+		const currentDistance = info.distance;
+		const delta = newDistance - currentDistance;
+
+		// Move the second object along the direction vector
+		const moveX = info.direction.x * delta;
+		const moveY = info.direction.y * delta;
+
+		// Save history snapshot before moving
+		onMoveStart?.();
+
+		if (secondObjectType === 'bed') {
+			const bed = beds.find((b) => b._id === secondObjectId);
+			if (bed) {
+				onMoveBed(secondObjectId as Id<'beds'>, bed.x + moveX, bed.y + moveY);
+			}
+		} else {
+			const plant = plants.find((p) => p._id === secondObjectId);
+			if (plant) {
+				onMovePlant(secondObjectId as Id<'placedPlants'>, plant.x + moveX, plant.y + moveY);
+			}
+		}
+	}
 
 	// SVG element reference for size tracking
 	let svgElement = $state<SVGSVGElement | null>(null);
@@ -260,21 +356,13 @@
 		const height = Math.abs(bedCurrentY - bedStartY);
 
 		// Convert to field coordinates and feet
-		let fieldPos = canvasToField(minX, minY, canvasState);
+		const fieldPos = canvasToField(minX, minY, canvasState);
 		const widthInches = width / (pixelsPerInch * zoom);
 		const heightInches = height / (pixelsPerInch * zoom);
 
-		// Apply snapping to position (in inches)
-		fieldPos = {
-			x: snapToGrid(fieldPos.x, snapIncrement),
-			y: snapToGrid(fieldPos.y, snapIncrement)
-		};
-
-		// Minimum bed size: 1 foot, with snapping applied
-		let widthFeet = Math.max(1, Math.round(widthInches / 12));
-		let heightFeet = Math.max(1, Math.round(heightInches / 12));
-		widthFeet = snapFeetToGrid(widthFeet, snapIncrement);
-		heightFeet = snapFeetToGrid(heightFeet, snapIncrement);
+		// Minimum bed size: 1 foot
+		const widthFeet = Math.max(1, Math.round(widthInches / 12));
+		const heightFeet = Math.max(1, Math.round(heightInches / 12));
 
 		// Only create if dragged enough
 		if (widthFeet >= 1 && heightFeet >= 1) {
@@ -321,7 +409,41 @@
 		e.preventDefault();
 	}
 
-	// Bed move handler - supports multi-selection drag
+	// Clear smart guides when drag ends
+	function handleMoveEnd() {
+		activeGuides = [];
+		activeDiagonalGuides = [];
+		activeDistances = [];
+	}
+
+	// Get all bounding boxes for smart guide calculations (excluding dragged objects)
+	function getAllBoundingBoxes(excludeIds: Set<string>): BoundingBox[] {
+		const boxes: BoundingBox[] = [];
+
+		// Add bed bounding boxes
+		for (const bed of beds) {
+			if (excludeIds.has(bed._id)) continue;
+			boxes.push(getBedBoundingBox(bed));
+		}
+
+		// Add plant bounding boxes (in field coordinates)
+		for (const plant of plants) {
+			if (excludeIds.has(plant._id)) continue;
+			const bed = beds.find((b) => b._id === plant.bedId);
+			if (!bed) continue;
+
+			// Convert plant's bed-local coords to field coords
+			const fieldX = plant.x + bed.x;
+			const fieldY = plant.y + bed.y;
+			const radius = plant.spacingMin / 2;
+
+			boxes.push(createCircleBoundingBox(plant._id, fieldX, fieldY, radius));
+		}
+
+		return boxes;
+	}
+
+	// Bed move handler - supports multi-selection drag with smart guides
 	function handleBedMove(id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>) {
 		// Convert pixel delta to inches
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
@@ -332,20 +454,57 @@
 			? allSelectedIds
 			: new Set([id]);
 
-		// Move all selected beds
+		// Get the primary bed being dragged (for smart guide calculations)
+		const primaryBed = beds.find((b) => b._id === id);
+		if (!primaryBed) return;
+
+		// Calculate proposed new position for primary bed
+		const proposedX = primaryBed.x + deltaInchesX;
+		const proposedY = primaryBed.y + deltaInchesY;
+		const dims = getBedDimensionsInInches(primaryBed);
+
+		// Create bounding box for proposed position (include rotation for diagonal alignment)
+		const proposedBox = createBoundingBox(
+			primaryBed._id,
+			proposedX,
+			proposedY,
+			dims.width,
+			dims.height,
+			primaryBed.rotation
+		);
+
+		// Get all other objects' bounding boxes (excluding dragged objects)
+		const excludeIds = new Set([...idsToMove].map(String));
+		const otherBoxes = getAllBoundingBoxes(excludeIds);
+
+		// Calculate snap threshold in inches (based on zoom)
+		const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
+
+		// Calculate smart guides
+		const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches);
+
+		// Update visual guides
+		activeGuides = result.guides;
+		activeDiagonalGuides = result.diagonalGuides;
+		activeDistances = result.distances;
+
+		// Calculate the snap offset (difference between proposed and snapped position)
+		const snapOffsetX = result.snappedX - proposedX;
+		const snapOffsetY = result.snappedY - proposedY;
+
+		// Move all selected beds with the same offset
 		for (const bedId of idsToMove) {
 			const bed = beds.find((b) => b._id === bedId);
 			if (!bed) continue;
 
-			// Apply snapping to new position
-			const newX = snapToGrid(bed.x + deltaInchesX, snapIncrement);
-			const newY = snapToGrid(bed.y + deltaInchesY, snapIncrement);
+			const newX = bed.x + deltaInchesX + snapOffsetX;
+			const newY = bed.y + deltaInchesY + snapOffsetY;
 
 			onMoveBed(bedId, newX, newY);
 		}
 	}
 
-	// Plant move handler - supports multi-selection drag
+	// Plant move handler - supports multi-selection drag with smart guides
 	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) {
 		// Convert pixel delta to inches (local bed coordinates)
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
@@ -356,14 +515,56 @@
 			? allSelectedIds
 			: new Set([id]);
 
-		// Move all selected plants
+		// Get the primary plant being dragged
+		const primaryPlant = plants.find((p) => p._id === id);
+		if (!primaryPlant) return;
+
+		const primaryBed = beds.find((b) => b._id === primaryPlant.bedId);
+		if (!primaryBed) return;
+
+		// Calculate proposed new field position
+		const proposedFieldX = primaryPlant.x + primaryBed.x + deltaInchesX;
+		const proposedFieldY = primaryPlant.y + primaryBed.y + deltaInchesY;
+		const radius = primaryPlant.spacingMin / 2;
+
+		// Create bounding box for proposed position
+		const proposedBox = createCircleBoundingBox(
+			primaryPlant._id,
+			proposedFieldX,
+			proposedFieldY,
+			radius
+		);
+
+		// Get all other objects' bounding boxes (excluding dragged plants)
+		const excludeIds = new Set([...idsToMove].map(String));
+		const otherBoxes = getAllBoundingBoxes(excludeIds);
+
+		// Calculate snap threshold in inches
+		const thresholdInches = SNAP_THRESHOLD_PX / (pixelsPerInch * zoom);
+
+		// Calculate smart guides (use center for plants)
+		const result = calculateSmartGuides(proposedBox, otherBoxes, thresholdInches);
+
+		// Update visual guides
+		activeGuides = result.guides;
+		activeDiagonalGuides = result.diagonalGuides;
+		activeDistances = result.distances;
+
+		// Calculate snap offset (for circles, snappedX/Y is the center after snap)
+		// We need to convert back to the delta that should be applied
+		const snappedCenterX = result.snappedX + radius; // snappedX is left edge, add radius for center
+		const snappedCenterY = result.snappedY + radius; // snappedY is top edge, add radius for center
+		const snapOffsetX = snappedCenterX - proposedFieldX;
+		const snapOffsetY = snappedCenterY - proposedFieldY;
+
+		// Move all selected plants with the same offset
 		for (const plantId of idsToMove) {
 			const plant = plants.find((p) => p._id === plantId);
 			if (!plant) continue;
 
-			// Calculate new position (plants use local bed coordinates)
-			const newX = plant.x + deltaInchesX;
-			const newY = plant.y + deltaInchesY;
+			// Calculate new local position (plants use local bed coordinates)
+			const newX = plant.x + deltaInchesX + snapOffsetX;
+			const newY = plant.y + deltaInchesY + snapOffsetY;
 
 			onMovePlant(plantId, newX, newY);
 		}
@@ -412,12 +613,12 @@
 			heightPixels={heightPx}
 			{pixelsPerInch}
 			{zoom}
-			{snapIncrement}
 			isSelected={selectedBedIds.has(bed._id)}
 			{selectedBedIds}
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
 			{onMoveStart}
+			onMoveEnd={handleMoveEnd}
 			onResize={onResizeBed}
 			onRotate={onRotateBed}
 		/>
@@ -438,8 +639,30 @@
 			onSelect={onSelectPlant}
 			onMove={handlePlantMove}
 			{onMoveStart}
+			onMoveEnd={handleMoveEnd}
 		/>
 	{/each}
+
+	<!-- Smart guides overlay (rendered on top during drag) -->
+	{#if activeGuides.length > 0 || activeDiagonalGuides.length > 0 || activeDistances.length > 0}
+		<SmartGuides
+			guides={activeGuides}
+			diagonalGuides={activeDiagonalGuides}
+			distances={activeDistances}
+			{canvasState}
+			{viewportWidth}
+			{viewportHeight}
+		/>
+	{/if}
+
+	<!-- Selection distance overlay (when exactly 2 objects selected) -->
+	{#if selectionDistanceInfo}
+		<SelectionDistance
+			distanceInfo={selectionDistanceInfo.info}
+			{canvasState}
+			onDistanceChange={handleSelectionDistanceChange}
+		/>
+	{/if}
 
 	<!-- Bed creation preview -->
 	{#if isCreatingBed}
