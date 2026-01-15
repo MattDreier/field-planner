@@ -57,6 +57,13 @@
 	const selectedBedId = $derived(selectedBedIds.size === 1 ? [...selectedBedIds][0] : null);
 	const selectedPlantId = $derived(selectedPlantIds.size === 1 ? [...selectedPlantIds][0] : null);
 
+	// Default dimensions for new beds (used when shape tools are active)
+	let bedDefaults = $state({
+		widthFeet: 4,
+		heightFeet: 8,
+		rotation: 0
+	});
+
 	// Sun simulation state (default to zone 6b latitude ~40°N)
 	// Month is derived from the timeline's currentViewDate for unified date control
 	let sunSimulationBase = $state<Omit<SunSimulationState, 'month'>>({
@@ -253,6 +260,7 @@
 			y,
 			widthFeet,
 			...(shape === 'rectangle' ? { heightFeet: heightFeet! } : {}),
+			rotation: bedDefaults.rotation, // Apply default rotation to new beds
 			createdAt: Date.now()
 		} as Bed;
 		beds = [...beds, newBed];
@@ -653,6 +661,7 @@
 				hasSelection={!!selectedBedId || !!selectedPlantId}
 				{selectedBed}
 				{sunSimulation}
+				{bedDefaults}
 				{snapEnabled}
 				{snapTemporarilyDisabled}
 				onToolChange={setTool}
@@ -660,12 +669,15 @@
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
 				onUpdateSunSimulation={handleUpdateSunSimulation}
+				onUpdateBedDefaults={(updates) => bedDefaults = { ...bedDefaults, ...updates }}
 				onToggleSnap={() => snapEnabled = !snapEnabled}
 			/>
 
-			<div class="flex-1 overflow-hidden">
-				<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
-			</div>
+			{#if currentTool === 'select'}
+				<div class="flex-1 overflow-hidden">
+					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
+				</div>
+			{/if}
 
 			{#if plants.length > 0}
 				<HeightLegend minHeight={heightRange().min} maxHeight={heightRange().max} />
@@ -688,6 +700,7 @@
 				{selectedPlantIds}
 				{dragSource}
 				{sunSimulation}
+				{bedDefaults}
 				onSelectBed={selectBed}
 				onSelectPlant={selectPlant}
 				onCreateBed={handleCreateBed}

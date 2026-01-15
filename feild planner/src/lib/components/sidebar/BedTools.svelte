@@ -5,11 +5,18 @@
 	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
 	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
 
+	interface BedDefaults {
+		widthFeet: number;
+		heightFeet: number;
+		rotation: number;
+	}
+
 	interface Props {
 		currentTool: Tool;
 		hasSelection: boolean;
 		selectedBed: Bed | null;
 		sunSimulation: SunSimulationState;
+		bedDefaults: BedDefaults;
 		snapEnabled?: boolean;
 		snapTemporarilyDisabled?: boolean; // True when Alt/Option is held during drag
 		onToolChange: (tool: Tool) => void;
@@ -17,6 +24,7 @@
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 		onRotateBed?: (id: string, rotation: number) => void;
 		onUpdateSunSimulation: (state: Partial<SunSimulationState>) => void;
+		onUpdateBedDefaults: (defaults: Partial<BedDefaults>) => void;
 		onToggleSnap?: () => void;
 	}
 
@@ -25,6 +33,7 @@
 		hasSelection,
 		selectedBed,
 		sunSimulation,
+		bedDefaults,
 		snapEnabled = true,
 		snapTemporarilyDisabled = false,
 		onToolChange,
@@ -32,13 +41,27 @@
 		onResizeBed,
 		onRotateBed,
 		onUpdateSunSimulation,
+		onUpdateBedDefaults,
 		onToggleSnap
 	}: Props = $props();
 
-	// Bed property inputs
+	// Expanded mode when any tool other than select is active
+	const expanded = $derived(currentTool !== 'select');
+
+	// Show bed settings form when shape tool active OR when a bed is selected
+	const showBedSettings = $derived(
+		(currentTool === 'rectangle' || currentTool === 'circle') || selectedBed !== null
+	);
+
+	// Bed property inputs (for selected bed)
 	let widthInput = $state('');
 	let heightInput = $state('');
 	let rotationInput = $state('');
+
+	// Default bed inputs (for new beds)
+	let defaultWidthInput = $state('');
+	let defaultHeightInput = $state('');
+	let defaultRotationInput = $state('');
 
 	// Sun simulation state
 	let isRequestingLocation = $state(false);
@@ -57,6 +80,39 @@
 			rotationInput = (selectedBed.rotation ?? 0).toFixed(0);
 		}
 	});
+
+	// Sync default inputs with bedDefaults prop
+	$effect(() => {
+		defaultWidthInput = bedDefaults.widthFeet.toFixed(2);
+		defaultHeightInput = bedDefaults.heightFeet.toFixed(2);
+		defaultRotationInput = bedDefaults.rotation.toFixed(0);
+	});
+
+	// Handlers for default bed settings
+	function handleDefaultWidthChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0.5) {
+			onUpdateBedDefaults({ widthFeet: value });
+		}
+	}
+
+	function handleDefaultHeightChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0.5) {
+			onUpdateBedDefaults({ heightFeet: value });
+		}
+	}
+
+	function handleDefaultRotationChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value)) {
+			const normalizedValue = ((value % 360) + 360) % 360;
+			onUpdateBedDefaults({ rotation: normalizedValue });
+		}
+	}
 
 	function handleToolChange(value: string | undefined) {
 		if (!value) {
@@ -153,7 +209,7 @@
 	}
 </script>
 
-<div class="p-4 border-b border-border">
+<div class="p-4 {expanded ? 'flex-1 overflow-auto' : 'border-b border-border'}">
 	<h3 class="font-semibold text-lg mb-3">Tools</h3>
 
 	<!-- Icon-only toolbar (Figma style) -->
@@ -221,6 +277,82 @@
 				<Trash2 class="w-4 h-4" />
 				Delete Selected
 			</Button>
+		</div>
+	{/if}
+
+	<!-- New Bed Settings (when shape tool active, no bed selected) -->
+	{#if expanded && !selectedBed && (currentTool === 'rectangle' || currentTool === 'circle')}
+		<div class="mt-4 pt-4 border-t border-border flex-1">
+			<h4 class="font-medium text-sm mb-3">
+				{currentTool === 'rectangle' ? 'Rectangular' : 'Circular'} Bed
+			</h4>
+
+			<div class="space-y-3">
+				<div>
+					<label for="default-width" class="block text-xs text-muted-foreground mb-1">
+						{currentTool === 'circle' ? 'Diameter (ft)' : 'Width (ft)'}
+					</label>
+					<input
+						id="default-width"
+						type="number"
+						min="0.5"
+						step="0.5"
+						bind:value={defaultWidthInput}
+						onchange={handleDefaultWidthChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+				</div>
+
+				{#if currentTool === 'rectangle'}
+					<div>
+						<label for="default-height" class="block text-xs text-muted-foreground mb-1">
+							Height (ft)
+						</label>
+						<input
+							id="default-height"
+							type="number"
+							min="0.5"
+							step="0.5"
+							bind:value={defaultHeightInput}
+							onchange={handleDefaultHeightChange}
+							class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+						/>
+					</div>
+				{/if}
+
+				<div>
+					<label for="default-rotation" class="block text-xs text-muted-foreground mb-1">
+						Rotation (degrees)
+					</label>
+					<input
+						id="default-rotation"
+						type="number"
+						min="0"
+						max="360"
+						step="1"
+						bind:value={defaultRotationInput}
+						onchange={handleDefaultRotationChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+				</div>
+			</div>
+
+			<div class="mt-4 pt-4 border-t border-border space-y-3">
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">How to place:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li><strong>Click</strong> to place with these dimensions</li>
+						<li><strong>Drag</strong> to draw a custom size</li>
+					</ul>
+				</div>
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">Tips:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li>Hold <kbd class="px-1 py-0.5 bg-muted rounded text-[10px]">Shift</kbd> while dragging to constrain proportions</li>
+						<li>Select a bed to edit its dimensions</li>
+					</ul>
+				</div>
+			</div>
 		</div>
 	{/if}
 
@@ -375,16 +507,18 @@
 		</div>
 	{/if}
 
-	<!-- Help text -->
-	<div class="mt-4 text-xs text-muted-foreground">
-		{#if currentTool === 'select'}
-			<p>Click to select beds or plants. Drag to move.</p>
-		{:else if currentTool === 'rectangle'}
-			<p>Click and drag on canvas to create a rectangular bed.</p>
-		{:else if currentTool === 'circle'}
-			<p>Click and drag on canvas to create a circular bed.</p>
-		{:else if currentTool === 'shadows'}
-			<p>Visualize how shadows fall across your garden throughout the day.</p>
-		{/if}
-	</div>
+	<!-- Help text (only in compact mode, expanded mode has detailed guides) -->
+	{#if !expanded}
+		<div class="mt-4 text-xs text-muted-foreground">
+			{#if currentTool === 'select'}
+				<p>Click to select beds or plants. Drag to move.</p>
+			{:else if currentTool === 'rectangle'}
+				<p>Click and drag on canvas to create a rectangular bed.</p>
+			{:else if currentTool === 'circle'}
+				<p>Click and drag on canvas to create a circular bed.</p>
+			{:else if currentTool === 'shadows'}
+				<p>Visualize how shadows fall across your garden throughout the day.</p>
+			{/if}
+		</div>
+	{/if}
 </div>

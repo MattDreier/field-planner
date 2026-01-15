@@ -30,6 +30,12 @@
 	import type { Id } from '../../../convex/_generated/dataModel';
 	import type { PlannedPlant, PlantingDates } from '$lib/types';
 
+	interface BedDefaults {
+		widthFeet: number;
+		heightFeet: number;
+		rotation: number;
+	}
+
 	interface Props {
 		pixelsPerInch: number;
 		zoom: number;
@@ -44,6 +50,7 @@
 		selectedPlantIds: Set<Id<'placedPlants'>>;
 		dragSource: DragSource;
 		sunSimulation: SunSimulationState;
+		bedDefaults?: BedDefaults;
 		onSelectBed: (id: Id<'beds'> | null, shiftKey?: boolean) => void;
 		onSelectPlant: (id: Id<'placedPlants'> | null, shiftKey?: boolean) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
@@ -72,6 +79,7 @@
 		selectedPlantIds,
 		dragSource,
 		sunSimulation,
+		bedDefaults = { widthFeet: 4, heightFeet: 8, rotation: 0 },
 		onSelectBed,
 		onSelectPlant,
 		onCreateBed,
@@ -463,24 +471,49 @@
 		isCreatingBed = false;
 		(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
 
-		// Calculate bed dimensions
-		const minX = Math.min(bedStartX, bedCurrentX);
-		const minY = Math.min(bedStartY, bedCurrentY);
-		const width = Math.abs(bedCurrentX - bedStartX);
-		const height = Math.abs(bedCurrentY - bedStartY);
+		// Calculate drag distance in pixels
+		const dragWidth = Math.abs(bedCurrentX - bedStartX);
+		const dragHeight = Math.abs(bedCurrentY - bedStartY);
+		const dragDistance = Math.sqrt(dragWidth * dragWidth + dragHeight * dragHeight);
 
-		// Convert to field coordinates and feet
-		const fieldPos = canvasToField(minX, minY, canvasState);
-		const widthInches = width / (pixelsPerInch * zoom);
-		const heightInches = height / (pixelsPerInch * zoom);
+		// Threshold for "click to place" vs "drag to size" (24 pixels)
+		const CLICK_THRESHOLD = 24;
 
-		// Minimum bed size: 1 foot
-		const widthFeet = Math.max(1, Math.round(widthInches / 12));
-		const heightFeet = Math.max(1, Math.round(heightInches / 12));
+		if (dragDistance < CLICK_THRESHOLD) {
+			// Click to place: use bedDefaults dimensions, center on click position
+			const widthInches = bedDefaults.widthFeet * 12;
+			const heightInches = (tool === 'circle' ? bedDefaults.widthFeet : bedDefaults.heightFeet) * 12;
 
-		// Only create if dragged enough
-		if (widthFeet >= 1 && heightFeet >= 1) {
-			onCreateBed(tool as 'rectangle' | 'circle', fieldPos.x, fieldPos.y, widthFeet, tool === 'rectangle' ? heightFeet : undefined);
+			// Convert click position to field coordinates, then offset to center the bed
+			const clickFieldPos = canvasToField(bedStartX, bedStartY, canvasState);
+			const fieldX = clickFieldPos.x - widthInches / 2;
+			const fieldY = clickFieldPos.y - heightInches / 2;
+
+			onCreateBed(
+				tool as 'rectangle' | 'circle',
+				fieldX,
+				fieldY,
+				bedDefaults.widthFeet,
+				tool === 'rectangle' ? bedDefaults.heightFeet : undefined
+			);
+		} else {
+			// Drag to size: use drag dimensions (original behavior)
+			const minX = Math.min(bedStartX, bedCurrentX);
+			const minY = Math.min(bedStartY, bedCurrentY);
+
+			// Convert to field coordinates and feet
+			const fieldPos = canvasToField(minX, minY, canvasState);
+			const widthInches = dragWidth / (pixelsPerInch * zoom);
+			const heightInches = dragHeight / (pixelsPerInch * zoom);
+
+			// Minimum bed size: 1 foot
+			const widthFeet = Math.max(1, Math.round(widthInches / 12));
+			const heightFeet = Math.max(1, Math.round(heightInches / 12));
+
+			// Only create if dragged enough
+			if (widthFeet >= 1 && heightFeet >= 1) {
+				onCreateBed(tool as 'rectangle' | 'circle', fieldPos.x, fieldPos.y, widthFeet, tool === 'rectangle' ? heightFeet : undefined);
+			}
 		}
 	}
 
