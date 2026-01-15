@@ -24,7 +24,7 @@
 	} from '$lib/utils/smartGuides';
 	import { calculateSunPosition } from '$lib/utils/sun';
 	import { calculateAllShadows, detectShadedPlants } from '$lib/utils/shadow';
-	import { calculateLifecyclePhases, getPlantVisibilityAtDate, type LifecyclePhase, type PlantVisibility } from '$lib/utils/timeline';
+	import { calculateLifecyclePhases, getPlantVisibilityAtDate, getPlantHeightAtDate, type LifecyclePhase, type PlantVisibility } from '$lib/utils/timeline';
 	import { timelineState, updatePlannedPlantPosition } from '$lib/stores/timeline.svelte';
 	import { getFlowerById, type FlowerData } from '$lib/data/flowers';
 	import type { Id } from '../../../convex/_generated/dataModel';
@@ -226,13 +226,14 @@
 
 			// Calculate visibility based on current timeline date
 			let visibility: PlantVisibility = { isVisible: true, currentPhase: null, phaseLabel: null, phaseColor: null, phaseProgress: 0 };
+			let currentHeight = plant.heightMax; // Default to max height
 
-			if (plant.plantingDates) {
-				const flowerData = getFlowerById(plant.flowerId);
-				if (flowerData) {
-					const phases = calculateLifecyclePhases(plant.plantingDates, flowerData);
-					visibility = getPlantVisibilityAtDate(phases, currentViewDate);
-				}
+			const flowerData = getFlowerById(plant.flowerId);
+			if (plant.plantingDates && flowerData) {
+				const phases = calculateLifecyclePhases(plant.plantingDates, flowerData);
+				visibility = getPlantVisibilityAtDate(phases, currentViewDate);
+				// Calculate growth-aware height for shadows
+				currentHeight = getPlantHeightAtDate(plant.plantingDates, flowerData, currentViewDate);
 			}
 
 			// Filter out plants that aren't visible at current date
@@ -251,7 +252,8 @@
 				canvasX: canvasPos.x,
 				canvasY: canvasPos.y,
 				spacingRadiusPixels,
-				visibility
+				visibility,
+				currentHeight
 			};
 		}).filter(Boolean) as Array<PlacedPlantType & {
 			absoluteX: number;
@@ -260,6 +262,7 @@
 			canvasY: number;
 			spacingRadiusPixels: number;
 			visibility: PlantVisibility;
+			currentHeight: number;
 		}>;
 	});
 
@@ -354,26 +357,26 @@
 		);
 	});
 
-	// Calculate shadows for all plants
+	// Calculate shadows for all plants (using growth-aware current height)
 	const shadows = $derived.by(() => {
 		if (!sunPosition || sunPosition.isNight) return [];
 		const plantsForShadow = plantsWithPositions.map((p) => ({
 			id: p._id,
 			x: p.absoluteX,
 			y: p.absoluteY,
-			heightMax: p.heightMax
+			heightMax: p.currentHeight // Growth-aware height based on timeline date
 		}));
 		return calculateAllShadows(plantsForShadow, sunPosition);
 	});
 
-	// Detect which plants are being shaded
+	// Detect which plants are being shaded (using growth-aware current height)
 	const shadedPlants = $derived.by(() => {
 		if (!sunPosition || sunPosition.isNight) return new Set<string>();
 		const plantsForShadow = plantsWithPositions.map((p) => ({
 			id: p._id,
 			x: p.absoluteX,
 			y: p.absoluteY,
-			heightMax: p.heightMax
+			heightMax: p.currentHeight // Growth-aware height based on timeline date
 		}));
 		return detectShadedPlants(plantsForShadow, sunPosition);
 	});

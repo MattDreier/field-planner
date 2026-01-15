@@ -62,7 +62,15 @@
 	});
 
 	// Derive shadow month from timeline's current view date
-	const shadowMonth = $derived(new Date(timelineState.currentViewDate + 'T12:00:00').getMonth());
+	// Use continuous month value (0-11.99) for smooth sun position interpolation
+	const shadowMonth = $derived.by(() => {
+		const date = new Date(timelineState.currentViewDate + 'T12:00:00');
+		const month = date.getMonth();
+		const dayOfMonth = date.getDate();
+		const daysInMonth = new Date(date.getFullYear(), month + 1, 0).getDate();
+		// Continuous month: e.g., Jan 15 ≈ 0.45, Jan 31 ≈ 0.97, Feb 1 ≈ 1.0
+		return month + (dayOfMonth - 1) / daysInMonth;
+	});
 
 	// Full sun simulation state with derived month
 	const sunSimulation = $derived<SunSimulationState>({

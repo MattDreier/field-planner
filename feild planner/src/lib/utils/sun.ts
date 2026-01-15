@@ -43,15 +43,17 @@ export function calculateSunPosition(
 	month = Math.max(0, Math.min(11.99, month));
 	timeOfDay = Math.max(0, Math.min(1, timeOfDay));
 
-	// Build a date for the given month (use 15th as mid-month)
-	// Interpolate between months for smooth transitions
+	// Build a date for the given month with smooth day interpolation
 	const year = new Date().getFullYear();
 	const monthFloor = Math.floor(month);
 	const monthFraction = month - monthFloor;
 
-	// Day of month: 15 for integer months, interpolate for fractional
-	const dayOfMonth = Math.round(15 + monthFraction * 15);
-	const date = new Date(year, monthFloor, Math.min(dayOfMonth, 28));
+	// Get days in this month for proper interpolation
+	const daysInMonth = new Date(year, monthFloor + 1, 0).getDate();
+	// Day of month: 1 at start of month, last day at end
+	// This ensures smooth transitions: Jan 31 (month ~0.97) → Feb 1 (month ~1.0)
+	const dayOfMonth = Math.max(1, Math.min(daysInMonth, Math.round(1 + monthFraction * (daysInMonth - 1))));
+	const date = new Date(year, monthFloor, dayOfMonth);
 
 	// Get sunrise and sunset times for this date and latitude
 	// Use longitude 0 for solar time (we only care about relative position)
