@@ -31,6 +31,7 @@
 	let zoom = $state(1.0);
 	let panX = $state(0);
 	let panY = $state(0);
+	let fieldRotation = $state(0); // Degrees clockwise from North (0-360)
 	let snapEnabled = $state(true);
 	let snapTemporarilyDisabled = $state(false); // True when Alt/Option is held during drag
 	const pixelsPerInch = 12;
@@ -123,6 +124,11 @@
 		zoom = 1.0;
 		panX = 0;
 		panY = 0;
+		fieldRotation = 0;
+	}
+
+	function handleFieldRotation(rotation: number) {
+		fieldRotation = rotation;
 	}
 
 	// Zoom with pivot point (used by wheel zoom)
@@ -670,6 +676,7 @@
 				{zoom}
 				{panX}
 				{panY}
+				rotation={fieldRotation}
 				{snapEnabled}
 				tool={currentTool}
 				{beds}
@@ -696,6 +703,8 @@
 				onZoomIn={zoomIn}
 				onZoomOut={zoomOut}
 				onReset={resetZoom}
+				rotation={fieldRotation}
+				onRotate={handleFieldRotation}
 			/>
 			<!-- Timeline panel -->
 			<TimelinePanel

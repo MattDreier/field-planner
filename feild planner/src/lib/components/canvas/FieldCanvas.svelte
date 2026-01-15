@@ -35,6 +35,7 @@
 		zoom: number;
 		panX: number;
 		panY: number;
+		rotation?: number; // Field rotation in degrees (0-360), clockwise from North
 		snapEnabled?: boolean;
 		tool: Tool;
 		beds: BedType[];
@@ -62,6 +63,7 @@
 		zoom,
 		panX,
 		panY,
+		rotation = 0,
 		snapEnabled = true,
 		tool,
 		beds,
@@ -752,7 +754,7 @@
 <svg
 	bind:this={svgElement}
 	class="w-full h-full border border-border rounded-lg shadow-inner touch-none"
-	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'};"
+	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'}; transform: rotate({rotation}deg); transform-origin: center;"
 	onpointerdown={handleCanvasPointerDown}
 	onpointermove={handleCanvasPointerMove}
 	onpointerup={handleCanvasPointerUp}
