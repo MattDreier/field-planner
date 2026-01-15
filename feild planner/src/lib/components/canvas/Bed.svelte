@@ -14,13 +14,15 @@
 		zoom: number;
 		snapIncrement: SnapIncrement;
 		isSelected: boolean;
+		selectedBedIds: Set<Id<'beds'>>; // All selected beds for multi-drag
 		onSelect: (id: Id<'beds'>, shiftKey?: boolean) => void;
-		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number) => void;
+		onMove?: (id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>) => void;
+		onMoveStart?: () => void; // Called once when drag/resize begins (for history snapshot)
 		onResize?: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 		onRotate?: (id: Id<'beds'>, rotation: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, onSelect, onMove, onResize, onRotate }: Props = $props();
+	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, snapIncrement, isSelected, selectedBedIds, onSelect, onMove, onMoveStart, onResize, onRotate }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
@@ -45,7 +47,18 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return; // Only primary button
-		onSelect(bed._id, e.shiftKey);
+
+		// Only change selection if:
+		// - This bed is NOT already selected (clicking to start a new selection/drag)
+		// - OR shift is pressed (toggling in multi-select)
+		// If already selected and not shift, preserve selection for multi-drag
+		if (!isSelected || e.shiftKey) {
+			onSelect(bed._id, e.shiftKey);
+		}
+
+		// Notify parent that a drag is starting (for history snapshot)
+		onMoveStart?.();
+
 		isDragging = true;
 		dragStartX = e.clientX;
 		dragStartY = e.clientY;
@@ -57,7 +70,8 @@
 		if (isDragging && onMove) {
 			const deltaX = e.clientX - dragStartX;
 			const deltaY = e.clientY - dragStartY;
-			onMove(bed._id, deltaX, deltaY);
+			// Pass all selected bed IDs for multi-drag
+			onMove(bed._id, deltaX, deltaY, selectedBedIds);
 			dragStartX = e.clientX;
 			dragStartY = e.clientY;
 		}
@@ -72,6 +86,10 @@
 	function handleResizePointerDown(handle: ResizeHandle, e: PointerEvent) {
 		if (e.button !== 0) return;
 		e.stopPropagation();
+
+		// Notify parent that a resize is starting (for history snapshot)
+		onMoveStart?.();
+
 		resizeHandle = handle;
 		resizeStartX = e.clientX;
 		resizeStartY = e.clientY;
@@ -262,6 +280,7 @@
 			currentRotation={rotation}
 			distance={Math.max(widthPixels, heightPixels) / 2 + 30}
 			onRotate={handleRotation}
+			onRotateStart={onMoveStart}
 		/>
 	{/if}
 </g>

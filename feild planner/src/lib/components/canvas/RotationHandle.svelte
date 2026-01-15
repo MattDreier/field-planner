@@ -10,9 +10,10 @@
 		currentRotation: number; // current rotation in degrees
 		distance?: number; // distance from center to handle
 		onRotate: (degrees: number) => void;
+		onRotateStart?: () => void; // Called once when rotation begins (for history snapshot)
 	}
 
-	let { centerX, centerY, currentRotation, distance = 40, onRotate }: Props = $props();
+	let { centerX, centerY, currentRotation, distance = 40, onRotate, onRotateStart }: Props = $props();
 
 	let isDragging = $state(false);
 
@@ -23,6 +24,10 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
+
+		// Notify parent that rotation is starting (for history snapshot)
+		onRotateStart?.();
+
 		isDragging = true;
 		(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 		e.stopPropagation();

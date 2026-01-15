@@ -17,7 +17,7 @@ const MAX_HISTORY = 50;
  */
 function deepClone<T>(obj: T): T {
 	try {
-		return deepClone(obj);
+		return structuredClone(obj);
 	} catch {
 		// Svelte 5 $state proxies can't be cloned with structuredClone
 		// Fall back to JSON parse/stringify
@@ -32,10 +32,31 @@ export function createHistoryStore() {
 
 	return {
 		/**
+		 * Direct access to past array for reactive tracking
+		 */
+		get past() {
+			return past;
+		},
+
+		/**
+		 * Direct access to future array for reactive tracking
+		 */
+		get future() {
+			return future;
+		},
+
+		/**
+		 * Direct access to current for reactive tracking
+		 */
+		get current() {
+			return current;
+		},
+
+		/**
 		 * Whether there are snapshots to undo to
 		 */
 		get canUndo() {
-			return past.length > 0;
+			return current !== null;
 		},
 
 		/**
@@ -86,49 +107,65 @@ export function createHistoryStore() {
 
 		/**
 		 * Restore previous state
+		 * @param currentBeds - The actual current beds state (for saving to future)
+		 * @param currentPlants - The actual current plants state (for saving to future)
 		 * @returns The snapshot to restore, or null if nothing to undo
 		 */
-		undo(): Snapshot | null {
-			if (past.length === 0) {
+		undo(currentBeds: Bed[], currentPlants: PlacedPlant[]): Snapshot | null {
+			// We need a current snapshot to undo to
+			if (current === null) {
 				return null;
 			}
 
-			// Get the last snapshot from past
-			const previousSnapshot = past[past.length - 1];
-			past = past.slice(0, -1);
+			// Save the actual UI state to future (for redo)
+			const actualUIState: Snapshot = {
+				beds: deepClone(currentBeds),
+				plants: deepClone(currentPlants),
+				timestamp: Date.now()
+			};
+			future = [...future, actualUIState];
 
-			// Push current to future
-			if (current !== null) {
-				future = [...future, current];
+			// The state to restore is current (the snapshot taken before the last change)
+			const stateToRestore = current;
+
+			// Pop from past to become new current (for next undo)
+			if (past.length > 0) {
+				current = past[past.length - 1];
+				past = past.slice(0, -1);
+			} else {
+				current = null;
 			}
 
-			// Update current
-			current = previousSnapshot;
-
 			// Return deep clone to prevent mutation
-			return deepClone(previousSnapshot);
+			return deepClone(stateToRestore);
 		},
 
 		/**
 		 * Restore next state
+		 * @param currentBeds - The actual current beds state (for saving as checkpoint)
+		 * @param currentPlants - The actual current plants state (for saving as checkpoint)
 		 * @returns The snapshot to restore, or null if nothing to redo
 		 */
-		redo(): Snapshot | null {
+		redo(currentBeds: Bed[], currentPlants: PlacedPlant[]): Snapshot | null {
 			if (future.length === 0) {
 				return null;
 			}
 
-			// Get the last snapshot from future
+			// Get the state to restore from future
 			const nextSnapshot = future[future.length - 1];
 			future = future.slice(0, -1);
 
-			// Push current to past
+			// Push old current to past (for undo chain)
 			if (current !== null) {
 				past = [...past, current];
 			}
 
-			// Update current
-			current = nextSnapshot;
+			// Save actual UI state as new current (checkpoint for undoing after redo)
+			current = {
+				beds: deepClone(currentBeds),
+				plants: deepClone(currentPlants),
+				timestamp: Date.now()
+			};
 
 			// Return deep clone to prevent mutation
 			return deepClone(nextSnapshot);

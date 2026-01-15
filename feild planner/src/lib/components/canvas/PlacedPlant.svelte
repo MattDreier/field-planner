@@ -12,11 +12,13 @@
 		hasConflict: boolean;
 		isShaded?: boolean;
 		isSelected: boolean;
+		selectedPlantIds: Set<Id<'placedPlants'>>; // All selected plants for multi-drag
 		onSelect: (id: Id<'placedPlants'>, shiftKey?: boolean) => void;
-		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number) => void;
+		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) => void;
+		onMoveStart?: () => void; // Called once when drag begins (for history snapshot)
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, onSelect, onMove }: Props = $props();
+	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, onSelect, onMove, onMoveStart }: Props = $props();
 
 	// Plant marker size (visual representation)
 	const markerRadius = 8;
@@ -28,7 +30,18 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
-		onSelect(plant._id, e.shiftKey);
+
+		// Only change selection if:
+		// - This plant is NOT already selected (clicking to start a new selection/drag)
+		// - OR shift is pressed (toggling in multi-select)
+		// If already selected and not shift, preserve selection for multi-drag
+		if (!isSelected || e.shiftKey) {
+			onSelect(plant._id, e.shiftKey);
+		}
+
+		// Notify parent that a drag is starting (for history snapshot)
+		onMoveStart?.();
+
 		isDragging = true;
 		dragStartX = e.clientX;
 		dragStartY = e.clientY;
@@ -40,7 +53,8 @@
 		if (isDragging && onMove) {
 			const deltaX = e.clientX - dragStartX;
 			const deltaY = e.clientY - dragStartY;
-			onMove(plant._id, deltaX, deltaY);
+			// Pass all selected plant IDs for multi-drag
+			onMove(plant._id, deltaX, deltaY, selectedPlantIds);
 			dragStartX = e.clientX;
 			dragStartY = e.clientY;
 		}

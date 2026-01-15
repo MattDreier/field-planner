@@ -34,6 +34,7 @@
 		onRotateBed: (id: Id<'beds'>, rotation: number) => void;
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
+		onMoveStart?: () => void; // Called once when a drag/resize begins (for history snapshot)
 		onPan: (deltaX: number, deltaY: number) => void;
 		onZoom: (newZoom: number, pivotX: number, pivotY: number) => void;
 	}
@@ -59,6 +60,7 @@
 		onRotateBed,
 		onPlacePlant,
 		onMovePlant,
+		onMoveStart,
 		onPan,
 		onZoom
 	}: Props = $props();
@@ -319,36 +321,52 @@
 		e.preventDefault();
 	}
 
-	// Bed move handler
-	function handleBedMove(id: Id<'beds'>, deltaX: number, deltaY: number) {
-		const bed = beds.find((b) => b._id === id);
-		if (!bed) return;
-
+	// Bed move handler - supports multi-selection drag
+	function handleBedMove(id: Id<'beds'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'beds'>>) {
 		// Convert pixel delta to inches
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
 		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
 
-		// Apply snapping to new position
-		const newX = snapToGrid(bed.x + deltaInchesX, snapIncrement);
-		const newY = snapToGrid(bed.y + deltaInchesY, snapIncrement);
+		// Determine which beds to move: all selected if multi-selected, otherwise just the clicked one
+		const idsToMove = allSelectedIds && allSelectedIds.size > 1 && allSelectedIds.has(id)
+			? allSelectedIds
+			: new Set([id]);
 
-		onMoveBed(id, newX, newY);
+		// Move all selected beds
+		for (const bedId of idsToMove) {
+			const bed = beds.find((b) => b._id === bedId);
+			if (!bed) continue;
+
+			// Apply snapping to new position
+			const newX = snapToGrid(bed.x + deltaInchesX, snapIncrement);
+			const newY = snapToGrid(bed.y + deltaInchesY, snapIncrement);
+
+			onMoveBed(bedId, newX, newY);
+		}
 	}
 
-	// Plant move handler
-	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number) {
-		const plant = plants.find((p) => p._id === id);
-		if (!plant) return;
-
+	// Plant move handler - supports multi-selection drag
+	function handlePlantMove(id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>) {
 		// Convert pixel delta to inches (local bed coordinates)
 		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
 		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
 
-		// Calculate new position (plants use local bed coordinates)
-		const newX = plant.x + deltaInchesX;
-		const newY = plant.y + deltaInchesY;
+		// Determine which plants to move: all selected if multi-selected, otherwise just the clicked one
+		const idsToMove = allSelectedIds && allSelectedIds.size > 1 && allSelectedIds.has(id)
+			? allSelectedIds
+			: new Set([id]);
 
-		onMovePlant(id, newX, newY);
+		// Move all selected plants
+		for (const plantId of idsToMove) {
+			const plant = plants.find((p) => p._id === plantId);
+			if (!plant) continue;
+
+			// Calculate new position (plants use local bed coordinates)
+			const newX = plant.x + deltaInchesX;
+			const newY = plant.y + deltaInchesY;
+
+			onMovePlant(plantId, newX, newY);
+		}
 	}
 </script>
 
@@ -396,8 +414,10 @@
 			{zoom}
 			{snapIncrement}
 			isSelected={selectedBedIds.has(bed._id)}
+			{selectedBedIds}
 			onSelect={onSelectBed}
 			onMove={handleBedMove}
+			{onMoveStart}
 			onResize={onResizeBed}
 			onRotate={onRotateBed}
 		/>
@@ -414,8 +434,10 @@
 			hasConflict={conflicts.has(plant._id)}
 			isShaded={shadedPlants.has(plant._id)}
 			isSelected={selectedPlantIds.has(plant._id)}
+			{selectedPlantIds}
 			onSelect={onSelectPlant}
 			onMove={handlePlantMove}
+			{onMoveStart}
 		/>
 	{/each}
 

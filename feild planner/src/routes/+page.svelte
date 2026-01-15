@@ -11,13 +11,19 @@
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
-	import { Plus } from 'lucide-svelte';
+	import { Plus, Undo2, Redo2 } from 'lucide-svelte';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
 	import type { SnapIncrement } from '$lib/utils/snap';
+	import { untrack } from 'svelte';
 
 	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
 	const convexAvailable = $derived(isConvexAvailable());
+
+	// Derived history state for reactivity
+	// Access the underlying state directly to ensure proper reactive tracking
+	const canUndo = $derived(history.current !== null);
+	const canRedo = $derived(history.future.length > 0);
 
 	// Canvas state
 	let zoom = $state(1.0);
@@ -58,6 +64,13 @@
 	// Local state for beds and plants
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
+
+	// Initialize history with empty state so first mutation can be undone
+	$effect(() => {
+		untrack(() => {
+			history.initialize([], []);
+		});
+	});
 
 	// Derived: get the currently selected bed (for single-selection UI like resize panel)
 	const selectedBed = $derived(
@@ -216,21 +229,20 @@
 		setTool('select');
 	}
 
-	// Bed move handler
-	function handleMoveBed(id: Id<'beds'>, newX: number, newY: number) {
-		// Save state before mutation
+	// Handler called once at the start of any drag/resize operation (for history snapshot)
+	function handleMoveStart() {
 		history.push(beds, plants);
+	}
 
+	// Bed move handler (called continuously during drag - history saved at drag start)
+	function handleMoveBed(id: Id<'beds'>, newX: number, newY: number) {
 		beds = beds.map((b) =>
 			b._id === id ? { ...b, x: newX, y: newY } : b
 		);
 	}
 
-	// Bed resize handler
+	// Bed resize handler (called continuously during resize - history saved at drag start)
 	function handleResizeBed(id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) {
-		// Save state before mutation
-		history.push(beds, plants);
-
 		beds = beds.map((b) =>
 			b._id === id
 				? { ...b, widthFeet: newWidthFeet, ...(b.shape === 'rectangle' ? { heightFeet: newHeightFeet } : {}) }
@@ -238,11 +250,8 @@
 		);
 	}
 
-	// Bed rotation handler
+	// Bed rotation handler (called continuously during rotation - history saved at rotation start)
 	function handleRotateBed(id: Id<'beds'>, rotation: number) {
-		// Save state before mutation
-		history.push(beds, plants);
-
 		beds = beds.map((b) =>
 			b._id === id ? { ...b, rotation } : b
 		);
@@ -281,11 +290,8 @@
 		plants = [...plants, newPlant];
 	}
 
-	// Plant move handler
+	// Plant move handler (called continuously during drag - history saved at drag start)
 	function handleMovePlant(id: Id<'placedPlants'>, x: number, y: number) {
-		// Save state before mutation
-		history.push(beds, plants);
-
 		plants = plants.map((p) =>
 			p._id === id ? { ...p, x, y } : p
 		);
@@ -446,36 +452,39 @@
 		if (modKey && e.key === 'z') {
 			e.preventDefault();
 			if (e.shiftKey) {
-				// Redo: Cmd/Ctrl+Shift+Z
-				const snapshot = history.redo();
-				if (snapshot) {
-					beds = snapshot.beds;
-					plants = snapshot.plants;
-					selectedBedIds = new Set();
-					selectedPlantIds = new Set();
-				}
+				handleRedo();
 			} else {
-				// Undo: Cmd/Ctrl+Z
-				const snapshot = history.undo();
-				if (snapshot) {
-					beds = snapshot.beds;
-					plants = snapshot.plants;
-					selectedBedIds = new Set();
-					selectedPlantIds = new Set();
-				}
+				handleUndo();
 			}
 		}
 
 		// Alternative Redo: Cmd/Ctrl+Y (common on Windows)
 		if (modKey && e.key === 'y') {
 			e.preventDefault();
-			const snapshot = history.redo();
-			if (snapshot) {
-				beds = snapshot.beds;
-				plants = snapshot.plants;
-				selectedBedIds = new Set();
-				selectedPlantIds = new Set();
-			}
+			handleRedo();
+		}
+	}
+
+	// Undo/Redo handlers (used by both keyboard shortcuts and buttons)
+	function handleUndo() {
+		// Pass current state so history can save it for redo
+		const snapshot = history.undo(beds, plants);
+		if (snapshot) {
+			beds = snapshot.beds;
+			plants = snapshot.plants;
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+		}
+	}
+
+	function handleRedo() {
+		// Pass current state so history can save it as checkpoint for undo
+		const snapshot = history.redo(beds, plants);
+		if (snapshot) {
+			beds = snapshot.beds;
+			plants = snapshot.plants;
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
 		}
 	}
 </script>
@@ -493,6 +502,30 @@
 		</div>
 
 		<div class="flex items-center gap-4">
+			<!-- Undo/Redo buttons -->
+			<div class="flex items-center gap-1">
+				<Button
+					variant="ghost"
+					size="icon"
+					onclick={handleUndo}
+					disabled={!canUndo}
+					title="Undo (Cmd+Z)"
+					class="h-9 w-9"
+				>
+					<Undo2 class="h-4 w-4" />
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon"
+					onclick={handleRedo}
+					disabled={!canRedo}
+					title="Redo (Cmd+Shift+Z)"
+					class="h-9 w-9"
+				>
+					<Redo2 class="h-4 w-4" />
+				</Button>
+			</div>
+
 			<LayoutManager
 				isConvexAvailable={convexAvailable}
 				{beds}
@@ -549,6 +582,7 @@
 				onRotateBed={handleRotateBed}
 				onPlacePlant={handlePlacePlant}
 				onMovePlant={handleMovePlant}
+				onMoveStart={handleMoveStart}
 				onPan={handlePan}
 				onZoom={handleZoomWithPivot}
 			/>
