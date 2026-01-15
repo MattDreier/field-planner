@@ -2,13 +2,15 @@
 	import { getFlowerById, type FlowerData } from '$lib/data/flowers';
 	import { X, Droplets, Sun, Thermometer, Scissors, Calendar, Ruler, Leaf } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
+	import type { PlacedPlant } from '$lib/types';
 
 	interface Props {
 		flowerId: string;
+		selectedPlant?: PlacedPlant | null;
 		onClose: () => void;
 	}
 
-	let { flowerId, onClose }: Props = $props();
+	let { flowerId, selectedPlant = null, onClose }: Props = $props();
 
 	const flower = $derived(getFlowerById(flowerId));
 
@@ -183,7 +185,7 @@
 					<h3 class="text-sm font-medium mb-2">Companion Plants</h3>
 					<div class="flex flex-wrap gap-2">
 						{#each flower.companionPlants as companion}
-							<span class="px-2 py-1 bg-green-500/10 text-green-700 dark:text-green-400 text-xs rounded-full">
+							<span class="px-2 py-1 text-xs rounded-full" style="background-color: oklch(0.95 0.04 160); color: oklch(0.40 0.10 160);">
 								{companion}
 							</span>
 						{/each}
@@ -197,7 +199,7 @@
 					<h3 class="text-sm font-medium mb-2">Watch Out For</h3>
 					<div class="flex flex-wrap gap-2">
 						{#each flower.commonPests as pest}
-							<span class="px-2 py-1 bg-red-500/10 text-red-700 dark:text-red-400 text-xs rounded-full">
+							<span class="px-2 py-1 text-xs rounded-full" style="background-color: oklch(0.95 0.04 30); color: oklch(0.45 0.12 30);">
 								{pest}
 							</span>
 						{/each}
