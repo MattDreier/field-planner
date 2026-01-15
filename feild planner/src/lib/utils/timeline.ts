@@ -5,14 +5,14 @@
 import type { FlowerData } from '$lib/data/flowers';
 import type { PlantingDates } from '$lib/types';
 
-// Phase colors matching the design system
+// Phase colors - muted, harmonious palette with semantic meaning
 export const PHASE_COLORS = {
-	'indoor-start': '#a855f7', // purple
-	germinating: '#c084fc', // lighter purple
-	'hardening-off': '#f59e0b', // amber
-	transplant: '#f97316', // orange
-	growing: '#22c55e', // green
-	'harvest-window': '#ef4444' // red
+	'indoor-start': 'oklch(0.65 0.15 300)', // Soft lavender - indoor/seedling
+	germinating: 'oklch(0.72 0.12 300)', // Lighter lavender - early growth
+	'hardening-off': 'oklch(0.70 0.12 70)', // Muted ochre - transition
+	transplant: 'oklch(0.68 0.14 50)', // Soft terracotta - action
+	growing: 'oklch(0.68 0.12 145)', // Sage green - vegetative
+	'harvest-window': 'oklch(0.65 0.14 25)' // Muted coral - harvest ready
 } as const;
 
 export type LifecyclePhase =
