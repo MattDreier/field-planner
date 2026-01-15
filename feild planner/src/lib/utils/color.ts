@@ -1,11 +1,26 @@
 /**
  * Height-based color mapping utilities.
- * Uses HSL color space: Blue (240°) for shortest → Red (0°) for tallest
+ * Uses OKLch color space for perceptually uniform colors that match the timeline aesthetic.
+ * Blue (260°) for shortest → Coral (30°) for tallest
  */
+
+// OKLch parameters matching timeline's muted palette
+const LIGHTNESS = 0.68;
+const CHROMA = 0.14;
+const HUE_SHORT = 260; // Cool blue for short plants
+const HUE_TALL = 30;   // Warm coral for tall plants
+const HUE_SAME = 145;  // Sage green when all same height
 
 interface PlantHeight {
 	id: string;
 	heightMax: number;
+}
+
+/**
+ * Generate an OKLch color string
+ */
+function oklch(lightness: number, chroma: number, hue: number): string {
+	return `oklch(${lightness} ${chroma} ${hue})`;
 }
 
 /**
@@ -27,16 +42,15 @@ export function calculateHeightColors(plants: PlantHeight[]): Map<string, string
 		let hue: number;
 
 		if (range === 0) {
-			// All plants same height: use middle color (green)
-			hue = 120;
+			// All plants same height: use sage green
+			hue = HUE_SAME;
 		} else {
-			// Normalize to 0-1, then map to 240-0 (blue to red)
+			// Normalize to 0-1, then map from blue (260) to coral (30)
 			const normalized = (plant.heightMax - minHeight) / range;
-			hue = 240 - normalized * 240; // 240=blue, 0=red
+			hue = HUE_SHORT - normalized * (HUE_SHORT - HUE_TALL);
 		}
 
-		// Fixed saturation and lightness for visibility
-		colors.set(plant.id, `hsl(${hue}, 70%, 50%)`);
+		colors.set(plant.id, oklch(LIGHTNESS, CHROMA, hue));
 	}
 
 	return colors;
@@ -49,12 +63,12 @@ export function getHeightColor(height: number, minHeight: number, maxHeight: num
 	const range = maxHeight - minHeight;
 
 	if (range === 0) {
-		return 'hsl(120, 70%, 50%)'; // Green for same height
+		return oklch(LIGHTNESS, CHROMA, HUE_SAME);
 	}
 
 	const normalized = (height - minHeight) / range;
-	const hue = 240 - normalized * 240;
-	return `hsl(${hue}, 70%, 50%)`;
+	const hue = HUE_SHORT - normalized * (HUE_SHORT - HUE_TALL);
+	return oklch(LIGHTNESS, CHROMA, hue);
 }
 
 /**
@@ -69,17 +83,16 @@ export function generateHeightLegend(
 	const range = maxHeight - minHeight;
 
 	if (range === 0) {
-		// Single entry for same height
-		return [{ height: minHeight, color: 'hsl(120, 70%, 50%)' }];
+		return [{ height: minHeight, color: oklch(LIGHTNESS, CHROMA, HUE_SAME) }];
 	}
 
 	for (let i = 0; i < steps; i++) {
 		const normalized = i / (steps - 1);
 		const height = minHeight + normalized * range;
-		const hue = 240 - normalized * 240;
+		const hue = HUE_SHORT - normalized * (HUE_SHORT - HUE_TALL);
 		legend.push({
 			height: Math.round(height),
-			color: `hsl(${hue}, 70%, 50%)`
+			color: oklch(LIGHTNESS, CHROMA, hue)
 		});
 	}
 
