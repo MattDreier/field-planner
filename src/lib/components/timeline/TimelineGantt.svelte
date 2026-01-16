@@ -234,7 +234,7 @@
 		return dateToX(currentDate);
 	});
 
-	// Scrubber drag handlers
+	// Scrubber drag handlers - support both mouse and touch
 	function handleScrubberMouseDown(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -243,12 +243,21 @@
 		document.addEventListener('mouseup', handleScrubberMouseUp);
 	}
 
-	function handleScrubberDrag(e: MouseEvent) {
+	function handleScrubberTouchStart(e: TouchEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		isDraggingScrubber = true;
+		document.addEventListener('touchmove', handleScrubberTouchMove, { passive: false });
+		document.addEventListener('touchend', handleScrubberTouchEnd);
+		document.addEventListener('touchcancel', handleScrubberTouchEnd);
+	}
+
+	function updateScrubberPosition(clientX: number) {
 		if (!isDraggingScrubber || !scrollContainer) return;
 
 		const rect = scrollContainer.getBoundingClientRect();
 		const scrollLeft = scrollContainer.scrollLeft;
-		const x = e.clientX - rect.left + scrollLeft;
+		const x = clientX - rect.left + scrollLeft;
 
 		// Clamp to valid range
 		const clampedX = Math.max(0, Math.min(chartWidth, x));
@@ -259,10 +268,29 @@
 		setCurrentViewDate(newDate, viewScale === 'season');
 	}
 
+	function handleScrubberDrag(e: MouseEvent) {
+		updateScrubberPosition(e.clientX);
+	}
+
+	function handleScrubberTouchMove(e: TouchEvent) {
+		e.preventDefault(); // Prevent scrolling while dragging
+		if (e.touches.length > 0) {
+			updateScrubberPosition(e.touches[0].clientX);
+		}
+	}
+
 	function handleScrubberMouseUp() {
 		isDraggingScrubber = false;
 		document.removeEventListener('mousemove', handleScrubberDrag);
 		document.removeEventListener('mouseup', handleScrubberMouseUp);
+		onScrubberRelease?.();
+	}
+
+	function handleScrubberTouchEnd() {
+		isDraggingScrubber = false;
+		document.removeEventListener('touchmove', handleScrubberTouchMove);
+		document.removeEventListener('touchend', handleScrubberTouchEnd);
+		document.removeEventListener('touchcancel', handleScrubberTouchEnd);
 		onScrubberRelease?.();
 	}
 
@@ -730,12 +758,13 @@
 
 				<!-- Draggable handle at top -->
 				<g
-					class="cursor-ew-resize"
+					class="cursor-ew-resize touch-none"
 					role="slider"
 					tabindex="0"
 					aria-label="Timeline scrubber - drag to change current view date"
 					aria-valuenow={new Date(timelineState.currentViewDate).getTime()}
 					onmousedown={handleScrubberMouseDown}
+					ontouchstart={handleScrubberTouchStart}
 				>
 					<!-- Handle background -->
 					<rect
