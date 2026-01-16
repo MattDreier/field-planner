@@ -176,7 +176,7 @@ export const TOUR_STEPS: TourStep[] = [
 		id: 'time-of-day',
 		title: 'Adjust Time of Day',
 		description:
-			'Move the time slider to see how shadows change throughout the day. Watch for plants that turn gray—they're being overshadowed by taller neighbors!',
+			'Move the time slider to see how shadows change throughout the day. Watch for plants that turn gray—they are being overshadowed by taller neighbors!',
 		targetSelector: '[data-tour="time-slider"]',
 		additionalSpotlights: ['[data-tour="garden-content"]'],
 		placement: 'right',
