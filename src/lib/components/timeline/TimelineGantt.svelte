@@ -294,7 +294,7 @@
 		onScrubberRelease?.();
 	}
 
-	// Entry drag handlers
+	// Entry drag handlers - support both mouse and touch
 	function handleEntryMouseDown(e: MouseEvent, entry: TimelineEntry) {
 		if (entry.type !== 'placed' || !onUpdatePlantDates) return;
 
@@ -306,13 +306,25 @@
 		document.addEventListener('mouseup', handleEntryMouseUp);
 	}
 
-	function handleEntryDrag(e: MouseEvent) {
+	function handleEntryTouchStart(e: TouchEvent, entry: TimelineEntry) {
+		if (entry.type !== 'placed' || !onUpdatePlantDates) return;
+
+		e.preventDefault();
+		e.stopPropagation();
+		draggingEntryId = entry.id;
+		dragStartEntryX = e.touches[0].clientX;
+		document.addEventListener('touchmove', handleEntryTouchMove, { passive: false });
+		document.addEventListener('touchend', handleEntryTouchEnd);
+		document.addEventListener('touchcancel', handleEntryTouchEnd);
+	}
+
+	function updateEntryPosition(clientX: number) {
 		if (!draggingEntryId || !scrollContainer || !onUpdatePlantDates) return;
 
 		const entry = entries.find((en) => en.id === draggingEntryId);
 		if (!entry || entry.type !== 'placed') return;
 
-		const deltaX = e.clientX - dragStartEntryX;
+		const deltaX = clientX - dragStartEntryX;
 		const deltaDays = Math.round(deltaX / dayWidth);
 
 		if (deltaDays === 0) return;
@@ -339,16 +351,34 @@
 		}
 
 		// Update the start position for smooth dragging
-		dragStartEntryX = e.clientX;
+		dragStartEntryX = clientX;
 
 		// Call the update handler
 		onUpdatePlantDates(draggingEntryId, newDates);
+	}
+
+	function handleEntryDrag(e: MouseEvent) {
+		updateEntryPosition(e.clientX);
+	}
+
+	function handleEntryTouchMove(e: TouchEvent) {
+		e.preventDefault(); // Prevent scrolling while dragging
+		if (e.touches.length > 0) {
+			updateEntryPosition(e.touches[0].clientX);
+		}
 	}
 
 	function handleEntryMouseUp() {
 		draggingEntryId = null;
 		document.removeEventListener('mousemove', handleEntryDrag);
 		document.removeEventListener('mouseup', handleEntryMouseUp);
+	}
+
+	function handleEntryTouchEnd() {
+		draggingEntryId = null;
+		document.removeEventListener('touchmove', handleEntryTouchMove);
+		document.removeEventListener('touchend', handleEntryTouchEnd);
+		document.removeEventListener('touchcancel', handleEntryTouchEnd);
 	}
 
 	// Build flat list of rows with their Y positions
@@ -716,8 +746,9 @@
 
 						<!-- Phase bars (draggable group for placed plants) -->
 						<g
-							class={row.entry.type === 'placed' && onUpdatePlantDates ? 'cursor-grab active:cursor-grabbing' : ''}
+							class={row.entry.type === 'placed' && onUpdatePlantDates ? 'cursor-grab active:cursor-grabbing touch-none' : ''}
 							onmousedown={(e) => handleEntryMouseDown(e, row.entry!)}
+							ontouchstart={(e) => handleEntryTouchStart(e, row.entry!)}
 							style={draggingEntryId === row.entry.id ? 'opacity: 0.7;' : ''}
 						>
 							{#each row.entry.phases as phase}
