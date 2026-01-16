@@ -22,9 +22,10 @@
 		gardenSettings: GardenSettings;
 		onOpenSuccessionPlanner?: () => void;
 		onUpdatePlantDates?: (plantId: string, dates: PlantingDates) => void;
+		onScrubberRelease?: () => void;
 	}
 
-	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates }: Props = $props();
+	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates, onScrubberRelease }: Props = $props();
 
 	// Initialize frost dates on first render
 	$effect(() => {
@@ -234,6 +235,7 @@
 						viewYear={timelineState.viewYear}
 						viewScale={timelineState.viewScale}
 						{onUpdatePlantDates}
+						{onScrubberRelease}
 						{tourMarkerDates}
 					/>
 				</div>

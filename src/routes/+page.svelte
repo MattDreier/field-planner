@@ -112,8 +112,9 @@
 		timeOfDay: 0.5 // noon
 	});
 
-	// Tour-specific state: tracks when time slider is released (for tour step completion)
+	// Tour-specific state: tracks when sliders are released (for tour step completion)
 	let timeSliderReleased = $state(false);
+	let timelineScrubberReleased = $state(false);
 
 	// Derive shadow month from timeline's current view date
 	// Use continuous month value (0-11.99) for smooth sun position interpolation
@@ -351,6 +352,7 @@
 		latitude: timelineState.gardenSettings.latitude,
 		timeOfDay: sunSimulationBase.timeOfDay,
 		timeSliderReleased,
+		timelineScrubberReleased,
 		firstPlantGrowingStart: firstPlantPhaseDates.growingStart,
 		firstPlantHarvestStart: firstPlantPhaseDates.harvestStart
 	});
@@ -373,6 +375,7 @@
 		// Reset flags when entering any step (they'll be set again by user actions)
 		untrack(() => {
 			timeSliderReleased = false;
+			timelineScrubberReleased = false;
 		});
 	});
 
@@ -1041,6 +1044,7 @@
 				gardenSettings={timelineState.gardenSettings}
 				onOpenSuccessionPlanner={openSuccessionPlanner}
 				onUpdatePlantDates={handleUpdatePlantDates}
+				onScrubberRelease={() => timelineScrubberReleased = true}
 			/>
 		</main>
 

@@ -18,10 +18,11 @@
 		viewYear: number;
 		viewScale: TimelineViewScale;
 		onUpdatePlantDates?: (plantId: string, dates: PlantingDates) => void;
+		onScrubberRelease?: () => void;
 		tourMarkerDates?: TourMarkerDates | null;
 	}
 
-	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates, tourMarkerDates }: Props = $props();
+	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates, onScrubberRelease, tourMarkerDates }: Props = $props();
 
 	// Scrubber drag state
 	let isDraggingScrubber = $state(false);
@@ -262,6 +263,7 @@
 		isDraggingScrubber = false;
 		document.removeEventListener('mousemove', handleScrubberDrag);
 		document.removeEventListener('mouseup', handleScrubberMouseUp);
+		onScrubberRelease?.();
 	}
 
 	// Entry drag handlers

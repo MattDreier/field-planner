@@ -34,6 +34,8 @@ export interface TourAppState {
 	timeOfDay: number;
 	/** Set to true when user releases the time slider (change event) */
 	timeSliderReleased: boolean;
+	/** Set to true when user releases the timeline scrubber (mouseup event) */
+	timelineScrubberReleased: boolean;
 	// Phase dates for first plant (used by timeline tour steps)
 	firstPlantGrowingStart?: string; // ISO date
 	firstPlantHarvestStart?: string; // ISO date
@@ -137,8 +139,8 @@ export const TOUR_STEPS: TourStep[] = [
 		additionalSpotlights: ['[data-tour="first-placed-plant"]'],
 		placement: 'top',
 		completionCondition: (state) => {
-			// Complete when scrubber reaches the start of the first plant's harvest phase
-			if (!state.firstPlantHarvestStart) return false;
+			// Complete when user releases scrubber AND it's in the harvest phase
+			if (!state.firstPlantHarvestStart || !state.timelineScrubberReleased) return false;
 			const current = new Date(state.currentViewDate + 'T12:00:00');
 			const harvestStart = new Date(state.firstPlantHarvestStart + 'T12:00:00');
 			return current >= harvestStart;

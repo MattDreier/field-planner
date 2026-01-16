@@ -73,9 +73,9 @@
 			case 'bottom':
 				return 'top: -8px; left: 50%; transform: translateX(-50%);';
 			case 'left':
-				return 'right: -8px; top: 50%; transform: translateY(-50%) rotate(-90deg);';
+				return 'right: -8px; top: 50%; transform: translateY(-50%) rotate(90deg);';
 			case 'right':
-				return 'left: -8px; top: 50%; transform: translateY(-50%) rotate(90deg);';
+				return 'left: -8px; top: 50%; transform: translateY(-50%) rotate(-90deg);';
 		}
 	});
 
