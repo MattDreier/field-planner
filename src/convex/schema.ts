@@ -4,6 +4,7 @@ import { v } from 'convex/values';
 export default defineSchema({
 	// Field layouts (top-level entity)
 	layouts: defineTable({
+		userId: v.string(),
 		name: v.string(),
 		description: v.optional(v.string()),
 		// Canvas settings (all in inches)
@@ -13,10 +14,11 @@ export default defineSchema({
 		// Timestamps
 		createdAt: v.number(),
 		updatedAt: v.number()
-	}),
+	}).index('by_user', ['userId']),
 
 	// Garden beds (one-to-many with layouts)
 	beds: defineTable({
+		userId: v.string(),
 		layoutId: v.id('layouts'),
 
 		// Shape type discriminator
@@ -36,12 +38,18 @@ export default defineSchema({
 		name: v.optional(v.string()),
 		fillColor: v.optional(v.string()),
 
+		// Transform
+		rotation: v.optional(v.number()),
+
 		// Metadata
 		createdAt: v.number()
-	}).index('by_layout', ['layoutId']),
+	})
+		.index('by_layout', ['layoutId'])
+		.index('by_user', ['userId']),
 
 	// Placed plants (one-to-many with beds)
 	placedPlants: defineTable({
+		userId: v.string(),
 		bedId: v.id('beds'),
 		layoutId: v.id('layouts'), // denormalized for efficient queries
 
@@ -57,8 +65,18 @@ export default defineSchema({
 		heightMax: v.number(), // inches
 		name: v.string(), // flower name
 
+		// Timeline scheduling (flattened)
+		indoorStartDate: v.optional(v.string()),
+		transplantDate: v.optional(v.string()),
+		directSowDate: v.optional(v.string()),
+
+		// Succession planning
+		successionGroupId: v.optional(v.string()),
+		successionIndex: v.optional(v.number()),
+
 		createdAt: v.number()
 	})
 		.index('by_bed', ['bedId'])
 		.index('by_layout', ['layoutId'])
+		.index('by_user', ['userId'])
 });

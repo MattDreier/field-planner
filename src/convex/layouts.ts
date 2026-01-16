@@ -1,19 +1,33 @@
 import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { requireAuth } from './lib/auth';
 
-// Get all layouts
+// Get all layouts for the authenticated user
 export const list = query({
 	args: {},
 	handler: async (ctx) => {
-		return await ctx.db.query('layouts').order('desc').collect();
+		const userId = await requireAuth(ctx);
+		return await ctx.db
+			.query('layouts')
+			.withIndex('by_user', (q) => q.eq('userId', userId))
+			.order('desc')
+			.collect();
 	}
 });
 
-// Get a single layout by ID
+// Get a single layout by ID (with ownership verification)
 export const get = query({
 	args: { id: v.id('layouts') },
 	handler: async (ctx, args) => {
-		return await ctx.db.get(args.id);
+		const userId = await requireAuth(ctx);
+		const layout = await ctx.db.get(args.id);
+		if (!layout) {
+			return null;
+		}
+		if (layout.userId !== userId) {
+			throw new Error('Not authorized to access this layout');
+		}
+		return layout;
 	}
 });
 
@@ -27,9 +41,11 @@ export const create = mutation({
 		pixelsPerInch: v.number()
 	},
 	handler: async (ctx, args) => {
+		const userId = await requireAuth(ctx);
 		const now = Date.now();
 		return await ctx.db.insert('layouts', {
 			...args,
+			userId,
 			createdAt: now,
 			updatedAt: now
 		});
@@ -47,10 +63,14 @@ export const update = mutation({
 		pixelsPerInch: v.optional(v.number())
 	},
 	handler: async (ctx, args) => {
+		const userId = await requireAuth(ctx);
 		const { id, ...updates } = args;
 		const existing = await ctx.db.get(id);
 		if (!existing) {
 			throw new Error('Layout not found');
+		}
+		if (existing.userId !== userId) {
+			throw new Error('Not authorized to update this layout');
 		}
 
 		// Filter out undefined values
@@ -69,6 +89,15 @@ export const update = mutation({
 export const remove = mutation({
 	args: { id: v.id('layouts') },
 	handler: async (ctx, args) => {
+		const userId = await requireAuth(ctx);
+		const layout = await ctx.db.get(args.id);
+		if (!layout) {
+			throw new Error('Layout not found');
+		}
+		if (layout.userId !== userId) {
+			throw new Error('Not authorized to delete this layout');
+		}
+
 		// Delete all plants in this layout
 		const plants = await ctx.db
 			.query('placedPlants')

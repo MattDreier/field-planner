@@ -1,9 +1,17 @@
+/// <reference types="svelte-clerk/env" />
+
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			auth: () => {
+				userId: string | null;
+				sessionId: string | null;
+				getToken: (options?: { template?: string }) => Promise<string | null>;
+			};
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

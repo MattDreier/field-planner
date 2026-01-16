@@ -5,7 +5,7 @@
 	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
 	import HeightLegend from '$lib/components/canvas/HeightLegend.svelte';
 	import MapControls from '$lib/components/layout/MapControls.svelte';
-		import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
+	import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -19,9 +19,46 @@
 	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
+	import { SignedIn, SignedOut, UserButton, useClerkContext } from 'svelte-clerk';
+	import { setupConvexAuth } from '$lib/stores/auth.svelte';
+	import { useConvexClient, useQuery } from 'convex-svelte';
+	import { api } from '../convex/_generated/api';
 
 	// Check if Convex is available (set in .env as VITE_CONVEX_URL)
 	const convexAvailable = $derived(isConvexAvailable());
+
+	// Layout persistence state
+	let currentLayoutId = $state<Id<'layouts'> | null>(null);
+	let isSaving = $state(false);
+	let isLoading = $state(false);
+	let lastSavedState = $state<{ beds: Bed[]; plants: PlacedPlant[] } | null>(null);
+
+	// Get Clerk context for programmatic sign-in (only when Convex available)
+	let clerkContext: ReturnType<typeof useClerkContext> | null = null;
+	let auth: ReturnType<typeof setupConvexAuth> | null = null;
+
+	// Only initialize Clerk/Convex auth when both are available
+	// Wrap in try-catch to prevent breaking the page if something goes wrong
+	if (convexAvailable) {
+		try {
+			clerkContext = useClerkContext();
+			auth = setupConvexAuth();
+		} catch (e) {
+			console.error('Failed to initialize auth:', e);
+		}
+	}
+
+	function handleSignIn() {
+		console.log('Sign in clicked, clerk:', clerkContext?.clerk);
+		clerkContext?.clerk?.openSignIn();
+	}
+
+	// Convex client and queries (only when available)
+	const client = convexAvailable ? useConvexClient() : null;
+	const layoutsQuery = convexAvailable ? useQuery(api.layouts.list, {}) : null;
+
+	// Derived layouts list for LayoutManager
+	const layouts = $derived(layoutsQuery?.data ?? []);
 
 	// Derived history state for reactivity
 	// Access the underlying state directly to ensure proper reactive tracking
@@ -93,6 +130,16 @@
 	// Local state for beds and plants
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
+
+	// Track unsaved changes by comparing current state to last saved state
+	const hasUnsavedChanges = $derived.by(() => {
+		if (!lastSavedState) return beds.length > 0 || plants.length > 0;
+		if (beds.length !== lastSavedState.beds.length) return true;
+		if (plants.length !== lastSavedState.plants.length) return true;
+		// Simple deep comparison - could be optimized
+		return JSON.stringify(beds) !== JSON.stringify(lastSavedState.beds) ||
+			JSON.stringify(plants) !== JSON.stringify(lastSavedState.plants);
+	});
 
 	// Initialize history with empty state so first mutation can be undone
 	$effect(() => {
@@ -607,6 +654,149 @@
 			selectedPlantIds = new Set();
 		}
 	}
+
+	// Layout persistence handlers
+	async function handleSaveLayout(name: string): Promise<void> {
+		if (!client) return;
+		isSaving = true;
+		try {
+			// Create the layout
+			const layoutId = await client.mutation(api.layouts.create, {
+				name,
+				canvasWidth: 240 * 12,
+				canvasHeight: 180 * 12,
+				pixelsPerInch: 12
+			});
+
+			// Map old bed IDs to new Convex IDs
+			const bedIdMap = new Map<string, Id<'beds'>>();
+
+			// Save all beds
+			for (const bed of beds) {
+				const newBedId = bed.shape === 'rectangle'
+					? await client.mutation(api.beds.createRectangle, {
+							layoutId: layoutId as Id<'layouts'>,
+							x: bed.x,
+							y: bed.y,
+							widthFeet: bed.widthFeet,
+							heightFeet: bed.heightFeet ?? bed.widthFeet,
+							name: bed.name,
+							fillColor: bed.fillColor,
+							rotation: bed.rotation
+						})
+					: await client.mutation(api.beds.createCircle, {
+							layoutId: layoutId as Id<'layouts'>,
+							x: bed.x,
+							y: bed.y,
+							widthFeet: bed.widthFeet,
+							name: bed.name,
+							fillColor: bed.fillColor,
+							rotation: bed.rotation
+						});
+				bedIdMap.set(bed._id, newBedId as Id<'beds'>);
+			}
+
+			// Save all plants with mapped bed IDs
+			for (const plant of plants) {
+				const newBedId = bedIdMap.get(plant.bedId);
+				if (!newBedId) continue;
+
+				await client.mutation(api.plants.create, {
+					layoutId: layoutId as Id<'layouts'>,
+					bedId: newBedId,
+					flowerId: plant.flowerId,
+					x: plant.x,
+					y: plant.y,
+					spacingMin: plant.spacingMin,
+					heightMax: plant.heightMax,
+					name: plant.name,
+					indoorStartDate: plant.plantingDates?.indoorStartDate,
+					transplantDate: plant.plantingDates?.transplantDate,
+					directSowDate: plant.plantingDates?.directSowDate,
+					successionGroupId: plant.successionGroupId,
+					successionIndex: plant.successionIndex
+				});
+			}
+
+			currentLayoutId = layoutId as Id<'layouts'>;
+			// Track saved state for unsaved changes detection
+			lastSavedState = { beds: [...beds], plants: [...plants] };
+		} catch (error) {
+			console.error('Failed to save layout:', error);
+			throw error; // Re-throw so LayoutManager can handle it
+		} finally {
+			isSaving = false;
+		}
+	}
+
+	async function handleLoadLayout(layoutId: string): Promise<void> {
+		if (!client) return;
+		isLoading = true;
+		try {
+			const id = layoutId as Id<'layouts'>;
+
+			// Fetch beds and plants
+			const [loadedBeds, loadedPlants] = await Promise.all([
+				client.query(api.beds.listByLayout, { layoutId: id }),
+				client.query(api.plants.listByLayout, { layoutId: id })
+			]);
+
+			// Replace local state (cast to match local types)
+			beds = loadedBeds as unknown as typeof beds;
+			plants = loadedPlants as unknown as typeof plants;
+
+			currentLayoutId = id;
+			// Track saved state for unsaved changes detection
+			lastSavedState = { beds: [...beds], plants: [...plants] };
+
+			// Clear selections
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+
+			// Re-initialize history with loaded state
+			history.initialize(beds, plants);
+		} catch (error) {
+			console.error('Failed to load layout:', error);
+			throw error; // Re-throw so LayoutManager can handle it
+		} finally {
+			isLoading = false;
+		}
+	}
+
+	async function handleDeleteLayout(layoutId: string): Promise<void> {
+		if (!client) return;
+
+		try {
+			const id = layoutId as Id<'layouts'>;
+			await client.mutation(api.layouts.remove, { id });
+
+			if (currentLayoutId === id) {
+				beds = [];
+				plants = [];
+				currentLayoutId = null;
+				lastSavedState = null;
+				history.initialize([], []);
+			}
+		} catch (error) {
+			console.error('Failed to delete layout:', error);
+			throw error; // Re-throw so LayoutManager can handle it
+		}
+	}
+
+	function handleNewLayout(): void {
+		// Save current state to history before clearing
+		if (beds.length > 0 || plants.length > 0) {
+			history.push(beds, plants);
+		}
+
+		beds = [];
+		plants = [];
+		currentLayoutId = null;
+		lastSavedState = null;
+		selectedBedIds = new Set();
+		selectedPlantIds = new Set();
+		history.initialize([], []);
+	}
 </script>
 
 <svelte:window onkeydown={handleKeyDown} />
@@ -650,9 +840,28 @@
 
 			<LayoutManager
 				isConvexAvailable={convexAvailable}
+				isSignedIn={auth?.isSignedIn ?? false}
 				{beds}
 				{plants}
+				{hasUnsavedChanges}
+				layouts={layouts.map((l: { _id: string; name: string; createdAt: number }) => ({ _id: l._id, name: l.name, createdAt: l.createdAt }))}
+				currentLayoutId={currentLayoutId ?? undefined}
+				onSave={handleSaveLayout}
+				onLoad={handleLoadLayout}
+				onDelete={handleDeleteLayout}
+				onNew={handleNewLayout}
+				onSignIn={handleSignIn}
 			/>
+
+			<!-- User authentication button -->
+			{#if convexAvailable}
+				<SignedIn>
+					<UserButton />
+				</SignedIn>
+				<SignedOut>
+					<Button variant="outline" size="sm" onclick={handleSignIn}>Sign In</Button>
+				</SignedOut>
+			{/if}
 		</div>
 	</header>
 
