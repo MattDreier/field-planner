@@ -149,7 +149,7 @@
 				>
 					<!-- Zone selector -->
 					<select
-						class="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+						class="h-8 pl-2 pr-6 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg%20xmlns%3d%22http%3a%2f%2fwww.w3.org%2f2000%2fsvg%22%20width%3d%2212%22%20height%3d%2212%22%20viewBox%3d%220%200%2024%2024%22%20fill%3d%22none%22%20stroke%3d%22%239ca3af%22%20stroke-width%3d%222%22%3e%3cpath%20d%3d%22m6%209%206%206%206-6%22%2f%3e%3c%2fsvg%3e')] bg-[length:12px] bg-[right_0.5rem_center] bg-no-repeat"
 						value={timelineState.gardenSettings.hardinessZone}
 						onchange={(e) => setHardinessZone(e.currentTarget.value)}
 					>
@@ -160,7 +160,7 @@
 
 					<!-- View scale selector -->
 					<select
-						class="h-8 px-2 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+						class="h-8 pl-2 pr-6 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg%20xmlns%3d%22http%3a%2f%2fwww.w3.org%2f2000%2fsvg%22%20width%3d%2212%22%20height%3d%2212%22%20viewBox%3d%220%200%2024%2024%22%20fill%3d%22none%22%20stroke%3d%22%239ca3af%22%20stroke-width%3d%222%22%3e%3cpath%20d%3d%22m6%209%206%206%206-6%22%2f%3e%3c%2fsvg%3e')] bg-[length:12px] bg-[right_0.5rem_center] bg-no-repeat"
 						value={timelineState.viewScale}
 						onchange={(e) => setViewScale(e.currentTarget.value as 'day' | 'week' | 'month' | 'season')}
 					>
@@ -171,7 +171,7 @@
 
 					<!-- Add succession button -->
 					{#if onOpenSuccessionPlanner}
-						<Button variant="outline" size="sm" class="h-8 text-xs" onclick={onOpenSuccessionPlanner}>
+						<Button variant="outline" size="sm" class="h-8 text-xs border-border" onclick={onOpenSuccessionPlanner}>
 							<Plus class="h-3 w-3 mr-1" />
 							Succession
 						</Button>

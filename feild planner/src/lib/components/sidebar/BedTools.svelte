@@ -223,7 +223,7 @@
 			<ToggleGroup.Item
 				value="select"
 				title="Select (V)"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
 			>
 				<MousePointer2 class="w-4 h-4" />
 			</ToggleGroup.Item>
@@ -231,7 +231,7 @@
 			<ToggleGroup.Item
 				value="rectangle"
 				title="Rectangle Bed (R)"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
 			>
 				<Square class="w-4 h-4" />
 			</ToggleGroup.Item>
@@ -239,7 +239,7 @@
 			<ToggleGroup.Item
 				value="circle"
 				title="Circle Bed (C)"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
 			>
 				<Circle class="w-4 h-4" />
 			</ToggleGroup.Item>
@@ -247,7 +247,7 @@
 			<ToggleGroup.Item
 				value="shadows"
 				title="Shadow Simulation"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm {sunSimulation.enabled && currentTool !== 'shadows' ? 'text-amber-500' : ''}"
+				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background {sunSimulation.enabled && currentTool !== 'shadows' ? '!text-amber-500' : ''}"
 			>
 				<Sun class="w-4 h-4" />
 			</ToggleGroup.Item>

@@ -417,9 +417,6 @@
 								</span>
 							{/if}
 						</span>
-						{#if row.entry.type === 'planned'}
-							<span class="ml-1 text-xs text-amber-500 bg-amber-500/20 px-1 rounded">planned</span>
-						{/if}
 					</div>
 				{/if}
 			{/each}
@@ -596,7 +593,7 @@
 							y={HEADER_HEIGHT - 8}
 							text-anchor="middle"
 							class="text-xs fill-muted-foreground"
-							class:fill-blue-500={marker.isWeekend}
+							style={marker.isWeekend ? 'fill: oklch(0.60 0.12 250)' : ''}
 						>
 							{marker.dayNum}
 						</text>

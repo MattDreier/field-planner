@@ -78,7 +78,7 @@
 					<span class="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full capitalize">
 						{flower.category.replace(/-/g, ' ')}
 					</span>
-					<span class="px-2 py-1 bg-secondary text-secondary-foreground text-xs rounded-full capitalize">
+					<span class="px-2 py-1 bg-muted text-muted-foreground text-xs rounded-full capitalize">
 						{flower.propagationMethod}
 					</span>
 				</div>
@@ -185,7 +185,7 @@
 					<h3 class="text-sm font-medium mb-2">Companion Plants</h3>
 					<div class="flex flex-wrap gap-2">
 						{#each flower.companionPlants as companion}
-							<span class="px-2 py-1 text-xs rounded-full" style="background-color: oklch(0.95 0.04 160); color: oklch(0.40 0.10 160);">
+							<span class="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
 								{companion}
 							</span>
 						{/each}
@@ -199,7 +199,7 @@
 					<h3 class="text-sm font-medium mb-2">Watch Out For</h3>
 					<div class="flex flex-wrap gap-2">
 						{#each flower.commonPests as pest}
-							<span class="px-2 py-1 text-xs rounded-full" style="background-color: oklch(0.95 0.04 30); color: oklch(0.45 0.12 30);">
+							<span class="px-2 py-1 bg-destructive/10 text-destructive text-xs rounded-full">
 								{pest}
 							</span>
 						{/each}

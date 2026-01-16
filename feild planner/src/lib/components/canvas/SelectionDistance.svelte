@@ -158,7 +158,7 @@
 			onfocus={handleInputFocus}
 			onblur={handleInputChange}
 			onkeydown={handleKeyDown}
-			class="w-16 px-2 py-1 text-xs font-medium text-center bg-white border-2 border-blue-500 rounded shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+			class="w-16 px-2 py-1 text-xs font-medium text-center bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-2 border-blue-500 dark:border-blue-400 rounded shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300 dark:focus:ring-blue-500"
 			style="font-size: 12px;"
 		/>
 	</div>

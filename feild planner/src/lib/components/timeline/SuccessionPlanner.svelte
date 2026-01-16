@@ -209,8 +209,8 @@
 		<!-- Header -->
 		<div class="flex items-center justify-between p-4 border-b border-border">
 			<div class="flex items-center gap-3">
-				<div class="p-2 bg-green-500/10 rounded-lg">
-					<Repeat class="w-5 h-5 text-green-500" />
+				<div class="p-2 bg-primary/10 rounded-lg">
+					<Repeat class="w-5 h-5 text-primary" />
 				</div>
 				<div>
 					<h2 id="succession-planner-title" class="text-lg font-semibold">
