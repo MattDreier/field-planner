@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SpacingCircle from './SpacingCircle.svelte';
-	import type { PlacedPlant } from '$lib/types';
+	import type { PlacedPlant, PlannedPlant } from '$lib/types';
+	import type { FlowerData } from '$lib/data/flowers';
 	import type { LifecyclePhase } from '$lib/utils/timeline';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -11,8 +12,11 @@
 		phaseProgress: number;
 	}
 
+	// Union type for both placed and planned plants
+	type PlantData = PlacedPlant | (PlannedPlant & { flowerData: FlowerData });
+
 	interface Props {
-		plant: PlacedPlant;
+		plant: PlantData;
 		cx: number; // center x in pixels (absolute canvas position)
 		cy: number; // center y in pixels (absolute canvas position)
 		spacingRadiusPixels: number;
@@ -20,18 +24,22 @@
 		hasConflict: boolean;
 		isShaded?: boolean;
 		isSelected: boolean;
-		selectedPlantIds: Set<Id<'placedPlants'>>; // All selected plants for multi-drag
+		selectedPlantIds: Set<Id<'placedPlants'> | Id<'plannedPlants'>>; // All selected plants for multi-drag
 		phaseInfo?: PhaseInfo; // Current lifecycle phase info
-		onSelect: (id: Id<'placedPlants'>, shiftKey?: boolean) => void;
-		onMove?: (id: Id<'placedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'>>, disableSnap?: boolean) => void;
+		successionIndex?: number; // For planned plants - shows #N badge
+		onSelect: (id: Id<'placedPlants'> | Id<'plannedPlants'>, shiftKey?: boolean) => void;
+		onMove?: (id: Id<'placedPlants'> | Id<'plannedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'> | Id<'plannedPlants'>>, disableSnap?: boolean) => void;
 		onMoveStart?: () => void; // Called once when drag begins (for history snapshot)
 		onMoveEnd?: () => void; // Called when drag ends (for clearing guides)
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
+	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, successionIndex, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
 
 	// Plant marker size (visual representation)
 	const markerRadius = 8;
+
+	// Derive plant name from either type
+	const plantName = $derived('name' in plant ? plant.name : plant.flowerData.name);
 
 	// Lucide icon paths (24x24 viewBox, will be scaled and centered)
 	// These match the icons used in PlantDetails sidebar
@@ -109,7 +117,7 @@
 	}
 </script>
 
-<g class="placed-plant" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id, e.shiftKey)}>
+<g class="plant-marker" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id, e.shiftKey)}>
 	<!-- Spacing circle - color coded by height (grey when shaded) -->
 	<SpacingCircle
 		{cx}
@@ -171,7 +179,24 @@
 		</g>
 	</g>
 
-	<!-- Plant label (only show when selected or hovered) -->
+	<!-- Succession number badge (for planned plants) -->
+	{#if successionIndex !== undefined}
+		<g transform="translate({cx + spacingRadiusPixels * 0.6}, {cy - spacingRadiusPixels * 0.6})">
+			<circle
+				r="10"
+				fill="rgba(0,0,0,0.6)"
+			/>
+			<text
+				y="4"
+				text-anchor="middle"
+				class="text-[10px] fill-white font-bold pointer-events-none"
+			>
+				#{successionIndex + 1}
+			</text>
+		</g>
+	{/if}
+
+	<!-- Plant label (only show when selected) -->
 	{#if isSelected}
 		<text
 			x={cx}
@@ -179,7 +204,7 @@
 			text-anchor="middle"
 			class="text-xs fill-foreground font-medium pointer-events-none"
 		>
-			{plant.name}
+			{plantName}
 		</text>
 	{/if}
 </g>

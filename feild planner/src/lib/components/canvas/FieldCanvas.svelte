@@ -1,7 +1,7 @@
 <script lang="ts">
 	import GridBackground from './GridBackground.svelte';
 	import Bed from './Bed.svelte';
-	import PlacedPlant from './PlacedPlant.svelte';
+	import PlantMarker from './PlantMarker.svelte';
 	import ShadowLayer from './ShadowLayer.svelte';
 	import SmartGuides from './SmartGuides.svelte';
 	import SelectionDistance from './SelectionDistance.svelte';
@@ -94,6 +94,38 @@
 		onZoom
 	}: Props = $props();
 
+	// Local selection state for planned plants (not managed by parent)
+	let selectedPlannedPlantIds = $state<Set<Id<'plannedPlants'>>>(new Set());
+
+	function selectPlannedPlant(id: Id<'plannedPlants'> | null, shiftKey = false) {
+		if (id === null) {
+			selectedPlannedPlantIds = new Set();
+			return;
+		}
+
+		if (shiftKey) {
+			// Shift+click: toggle in selection (allows cross-type selection for distance measurement)
+			const newSet = new Set(selectedPlannedPlantIds);
+			if (newSet.has(id)) {
+				newSet.delete(id);
+			} else {
+				newSet.add(id);
+			}
+			selectedPlannedPlantIds = newSet;
+			// Don't clear other selections with shift - allows mixed selection
+		} else {
+			// Regular click: single selection (toggle if same)
+			if (selectedPlannedPlantIds.size === 1 && selectedPlannedPlantIds.has(id)) {
+				selectedPlannedPlantIds = new Set();
+			} else {
+				selectedPlannedPlantIds = new Set([id]);
+			}
+			// Clear other selections only on regular click
+			onSelectPlant(null);
+			onSelectBed(null);
+		}
+	}
+
 	// Smart guides state
 	let activeGuides = $state<AlignmentGuide[]>([]);
 	let activeDiagonalGuides = $state<DiagonalGuide[]>([]);
@@ -112,13 +144,13 @@
 	// Lower value = less aggressive snapping, easier to position freely
 	const SNAP_THRESHOLD_PX = 4;
 
-	// Selection distance calculation (for exactly 2 selected objects)
-	const selectionDistanceInfo = $derived.by((): { info: SelectionDistanceResult; secondObjectId: string; secondObjectType: 'bed' | 'plant' } | null => {
-		const totalSelected = selectedBedIds.size + selectedPlantIds.size;
+	// Selection distance calculation (for exactly 2 selected objects - beds, placed plants, or planned plants)
+	const selectionDistanceInfo = $derived.by((): { info: SelectionDistanceResult; secondObjectId: string; secondObjectType: 'bed' | 'plant' | 'planned' } | null => {
+		const totalSelected = selectedBedIds.size + selectedPlantIds.size + selectedPlannedPlantIds.size;
 		if (totalSelected !== 2) return null;
 
 		// Gather selected objects with their bounding boxes
-		const selectedObjects: Array<{ id: string; type: 'bed' | 'plant'; box: BoundingBox }> = [];
+		const selectedObjects: Array<{ id: string; type: 'bed' | 'plant' | 'planned'; box: BoundingBox }> = [];
 
 		for (const bedId of selectedBedIds) {
 			const bed = beds.find((b) => b._id === bedId);
@@ -145,6 +177,19 @@
 						box: createCircleBoundingBox(plantId, fieldX, fieldY, radius)
 					});
 				}
+			}
+		}
+
+		// Include planned plants in selection distance
+		for (const plannedId of selectedPlannedPlantIds) {
+			const planned = plannedPlantsWithPositions.find((p) => p._id === plannedId);
+			if (planned) {
+				const radius = planned.flowerData.spacingMin / 2;
+				selectedObjects.push({
+					id: plannedId,
+					type: 'planned',
+					box: createCircleBoundingBox(plannedId, planned.absoluteX, planned.absoluteY, radius)
+				});
 			}
 		}
 
@@ -181,10 +226,21 @@
 			if (bed) {
 				onMoveBed(secondObjectId as Id<'beds'>, bed.x + moveX, bed.y + moveY);
 			}
-		} else {
+		} else if (secondObjectType === 'plant') {
 			const plant = plants.find((p) => p._id === secondObjectId);
 			if (plant) {
 				onMovePlant(secondObjectId as Id<'placedPlants'>, plant.x + moveX, plant.y + moveY);
+			}
+		} else if (secondObjectType === 'planned') {
+			const planned = plannedPlantsWithPositions.find((p) => p._id === secondObjectId);
+			if (planned) {
+				// Move planned plant by delta, clamped to bed bounds
+				const newX = planned.localX + moveX;
+				const newY = planned.localY + moveY;
+				const bedDims = getBedDimensionsInInches(planned.bed);
+				const clampedX = Math.max(0, Math.min(bedDims.width, newX));
+				const clampedY = Math.max(0, Math.min(bedDims.height, newY));
+				updatePlannedPlantPosition(secondObjectId as Id<'plannedPlants'>, clampedX, clampedY);
 			}
 		}
 	}
@@ -314,10 +370,19 @@
 					return null;
 				}
 
-				// Use stored position if available, otherwise auto-center in bed
+				// Use stored position if available, otherwise place along top edge of bed
 				const bedDims = getBedDimensionsInInches(bed);
-				const localX = planned.x ?? bedDims.width / 2;
-				const localY = planned.y ?? bedDims.height / 2;
+				let localX = planned.x;
+				let localY = planned.y;
+
+				if (localX === undefined || localY === undefined) {
+					// Place succession plants in a row along the top edge, outside the bed
+					const index = planned.successionIndex ?? 0;
+					const spacing = flowerData.spacingMin;
+					const startX = spacing / 2; // Start half-spacing from left edge
+					localX = startX + index * spacing;
+					localY = -spacing / 2; // Above the bed (negative Y = outside top edge)
+				}
 
 				// Convert to absolute field coordinates
 				const absolutePos = bedLocalToField(localX, localY, bed);
@@ -381,28 +446,35 @@
 		);
 	});
 
-	// Calculate shadows for all plants (using growth-aware current height)
-	const shadows = $derived.by(() => {
-		if (!sunPosition || sunPosition.isNight) return [];
-		const plantsForShadow = plantsWithPositions.map((p) => ({
+	// Combine placed + planned plants for shadow calculations
+	const allPlantsForShadow = $derived.by(() => {
+		const placed = plantsWithPositions.map((p) => ({
 			id: p._id,
 			x: p.absoluteX,
 			y: p.absoluteY,
 			heightMax: p.currentHeight // Growth-aware height based on timeline date
 		}));
-		return calculateAllShadows(plantsForShadow, sunPosition);
+
+		const planned = plannedPlantsWithPositions.map((p) => ({
+			id: p._id,
+			x: p.absoluteX,
+			y: p.absoluteY,
+			heightMax: getPlantHeightAtDate(p.plantingDates, p.flowerData, currentViewDate)
+		}));
+
+		return [...placed, ...planned];
 	});
 
-	// Detect which plants are being shaded (using growth-aware current height)
+	// Calculate shadows for all plants (placed + planned)
+	const shadows = $derived.by(() => {
+		if (!sunPosition || sunPosition.isNight) return [];
+		return calculateAllShadows(allPlantsForShadow, sunPosition);
+	});
+
+	// Detect which plants are being shaded (placed + planned)
 	const shadedPlants = $derived.by(() => {
 		if (!sunPosition || sunPosition.isNight) return new Set<string>();
-		const plantsForShadow = plantsWithPositions.map((p) => ({
-			id: p._id,
-			x: p.absoluteX,
-			y: p.absoluteY,
-			heightMax: p.currentHeight // Growth-aware height based on timeline date
-		}));
-		return detectShadedPlants(plantsForShadow, sunPosition);
+		return detectShadedPlants(allPlantsForShadow, sunPosition);
 	});
 
 	// Bed creation drag state
@@ -423,6 +495,7 @@
 			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 			onSelectBed(null);
 			onSelectPlant(null);
+			selectedPlannedPlantIds = new Set(); // Clear planned plant selection too
 			return;
 		}
 
@@ -778,10 +851,6 @@
 		updatePlannedPlantPosition(id, clampedX, clampedY);
 	}
 
-	// Drag state for planned plants
-	let draggingPlannedId = $state<Id<'plannedPlants'> | null>(null);
-	let plannedDragStartX = $state(0);
-	let plannedDragStartY = $state(0);
 </script>
 
 <svg
@@ -848,9 +917,9 @@
 		/>
 	{/each}
 
-	<!-- Plants -->
+	<!-- Placed Plants -->
 	{#each plantsWithPositions as plant (plant._id)}
-		<PlacedPlant
+		<PlantMarker
 			{plant}
 			cx={plant.canvasX}
 			cy={plant.canvasY}
@@ -866,100 +935,42 @@
 				phaseColor: plant.visibility.phaseColor,
 				phaseProgress: plant.visibility.phaseProgress
 			} : undefined}
-			onSelect={onSelectPlant}
+			onSelect={(id, shiftKey) => {
+				// Only clear planned selection on regular click, not shift+click (allows cross-type selection)
+				if (!shiftKey) {
+					selectedPlannedPlantIds = new Set();
+				}
+				onSelectPlant(id as Id<'placedPlants'>, shiftKey);
+			}}
 			onMove={handlePlantMove}
 			{onMoveStart}
 			onMoveEnd={handleMoveEnd}
 		/>
 	{/each}
 
-	<!-- Planned Plants (from succession planning, draggable) -->
+	<!-- Planned Plants (from succession planning) -->
 	{#each plannedPlantsWithPositions as planned (planned._id)}
 		{@const phaseColor = planned.visibility.phaseColor ?? 'hsl(200, 70%, 50%)'}
-		{@const isDragging = draggingPlannedId === planned._id}
-		<g
-			class="planned-plant cursor-move"
-			style="opacity: {isDragging ? 0.9 : 0.7};"
-			role="button"
-			tabindex="0"
-			onpointerdown={(e) => {
-				if (e.button !== 0) return;
-				draggingPlannedId = planned._id;
-				plannedDragStartX = e.clientX;
-				plannedDragStartY = e.clientY;
-				(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
-				e.stopPropagation();
+		<PlantMarker
+			plant={{ ...planned, flowerData: planned.flowerData }}
+			cx={planned.canvasX}
+			cy={planned.canvasY}
+			spacingRadiusPixels={planned.spacingRadiusPixels}
+			heightColor={phaseColor}
+			hasConflict={false}
+			isShaded={shadedPlants.has(planned._id)}
+			isSelected={selectedPlannedPlantIds.has(planned._id)}
+			selectedPlantIds={selectedPlannedPlantIds}
+			phaseInfo={{
+				currentPhase: planned.visibility.currentPhase,
+				phaseLabel: planned.visibility.phaseLabel,
+				phaseColor: planned.visibility.phaseColor,
+				phaseProgress: planned.visibility.phaseProgress
 			}}
-			onpointermove={(e) => {
-				if (draggingPlannedId !== planned._id) return;
-				const deltaX = e.clientX - plannedDragStartX;
-				const deltaY = e.clientY - plannedDragStartY;
-				handlePlannedPlantMove(planned._id, deltaX, deltaY, planned);
-				plannedDragStartX = e.clientX;
-				plannedDragStartY = e.clientY;
-			}}
-			onpointerup={(e) => {
-				draggingPlannedId = null;
-				(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
-			}}
-			onkeydown={(e) => {
-				// Arrow key movement
-				const step = e.shiftKey ? 12 : 3; // 1 inch or 0.25 inch
-				if (e.key === 'ArrowLeft') handlePlannedPlantMove(planned._id, -step * pixelsPerInch * zoom, 0, planned);
-				if (e.key === 'ArrowRight') handlePlannedPlantMove(planned._id, step * pixelsPerInch * zoom, 0, planned);
-				if (e.key === 'ArrowUp') handlePlannedPlantMove(planned._id, 0, -step * pixelsPerInch * zoom, planned);
-				if (e.key === 'ArrowDown') handlePlannedPlantMove(planned._id, 0, step * pixelsPerInch * zoom, planned);
-			}}
-		>
-			<!-- Dashed spacing circle to indicate "planned" status -->
-			<circle
-				cx={planned.canvasX}
-				cy={planned.canvasY}
-				r={planned.spacingRadiusPixels}
-				fill={phaseColor}
-				fill-opacity="0.15"
-				stroke={phaseColor}
-				stroke-width={isDragging ? 3 : 2}
-				stroke-dasharray="6 4"
-			/>
-			<!-- Plant marker -->
-			<circle
-				cx={planned.canvasX}
-				cy={planned.canvasY}
-				r="6"
-				fill={phaseColor}
-				stroke="white"
-				stroke-width="2"
-			/>
-			<!-- "Planned" badge -->
-			<g transform="translate({planned.canvasX + planned.spacingRadiusPixels * 0.6}, {planned.canvasY - planned.spacingRadiusPixels * 0.6})">
-				<rect
-					x="-18"
-					y="-8"
-					width="36"
-					height="16"
-					rx="4"
-					fill="rgba(0,0,0,0.6)"
-				/>
-				<text
-					x="0"
-					y="4"
-					text-anchor="middle"
-					class="text-[9px] fill-white font-medium pointer-events-none"
-				>
-					Planned
-				</text>
-			</g>
-			<!-- Plant name label below -->
-			<text
-				x={planned.canvasX}
-				y={planned.canvasY + planned.spacingRadiusPixels + 14}
-				text-anchor="middle"
-				class="text-xs fill-muted-foreground font-medium pointer-events-none"
-			>
-				{planned.flowerData.name}
-			</text>
-		</g>
+			successionIndex={planned.successionIndex}
+			onSelect={(id, shiftKey) => selectPlannedPlant(id as Id<'plannedPlants'>, shiftKey)}
+			onMove={(id, deltaX, deltaY) => handlePlannedPlantMove(id, deltaX, deltaY, planned)}
+		/>
 	{/each}
 
 	<!-- Smart guides overlay (rendered on top during drag) -->
