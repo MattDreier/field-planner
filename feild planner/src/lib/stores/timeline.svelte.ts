@@ -150,6 +150,10 @@ export function removePlannedPlant(id: Id<'plannedPlants'>) {
 	timelineState.plannedPlants = timelineState.plannedPlants.filter((p) => p._id !== id);
 }
 
+export function removePlannedPlantsByBed(bedId: Id<'beds'>) {
+	timelineState.plannedPlants = timelineState.plannedPlants.filter((p) => p.bedId !== bedId);
+}
+
 export function updatePlannedPlantPosition(id: Id<'plannedPlants'>, x: number, y: number) {
 	timelineState.plannedPlants = timelineState.plannedPlants.map((p) =>
 		p._id === id ? { ...p, x, y } : p

@@ -15,7 +15,7 @@
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
-	import { timelineState, togglePanel } from '$lib/stores/timeline.svelte';
+	import { timelineState, togglePanel, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
 	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
@@ -401,9 +401,12 @@
 				plants = plants.filter((p) => !selectedPlantIds.has(p._id));
 			}
 
-			// Delete selected beds and their plants
+			// Delete selected beds and their plants (including planned plants in timeline)
 			if (selectedBedIds.size > 0) {
 				plants = plants.filter((p) => !selectedBedIds.has(p.bedId));
+				for (const bedId of selectedBedIds) {
+					removePlannedPlantsByBed(bedId);
+				}
 				beds = beds.filter((b) => !selectedBedIds.has(b._id));
 			}
 
