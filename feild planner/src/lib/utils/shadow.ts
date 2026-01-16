@@ -25,8 +25,26 @@ export interface PlantForShadow {
 // Maximum shadow length in inches (cap to prevent extreme values at low sun angles)
 const MAX_SHADOW_LENGTH = 300; // 25 feet
 
-// Minimum sun altitude for shadow calculation (below this, shadows are too long/distorted)
-const MIN_SUN_ALTITUDE = 5; // degrees
+// Shadow rendering starts at 10° (faint) and reaches full opacity at 25°.
+// This creates a natural fade-in effect as the sun rises.
+const MIN_SHADOW_RENDER_ALTITUDE = 10; // degrees - shadows start appearing (faintly)
+const FULL_SHADOW_ALTITUDE = 25; // degrees - shadows at full opacity
+
+// Shade detection uses a higher threshold (20°) because below this, sunlight is heavily
+// scattered by the atmosphere and PAR (Photosynthetically Active Radiation) is minimal.
+// At low angles, R:FR ratios fluctuate (0.8-1.3) and the proportion of photosynthetically
+// useful light is low. Research shows 20° as a key threshold for plant growth impact.
+const MIN_SHADE_DETECTION_ALTITUDE = 20; // degrees
+
+/**
+ * Calculate shadow opacity based on sun altitude.
+ * Fades in from 0 at MIN_SHADOW_RENDER_ALTITUDE to 1 at FULL_SHADOW_ALTITUDE.
+ */
+export function getShadowOpacity(altitude: number): number {
+	if (altitude < MIN_SHADOW_RENDER_ALTITUDE) return 0;
+	if (altitude >= FULL_SHADOW_ALTITUDE) return 1;
+	return (altitude - MIN_SHADOW_RENDER_ALTITUDE) / (FULL_SHADOW_ALTITUDE - MIN_SHADOW_RENDER_ALTITUDE);
+}
 
 /**
  * Calculate shadow data for a single plant given sun position.
@@ -39,8 +57,8 @@ export function calculateShadow(
 	plant: PlantForShadow,
 	sunPosition: SunPosition
 ): ShadowData | null {
-	// No shadow when sun is below horizon or too low
-	if (sunPosition.isNight || sunPosition.altitude < MIN_SUN_ALTITUDE) {
+	// No shadow when sun is below horizon or too low for rendering
+	if (sunPosition.isNight || sunPosition.altitude < MIN_SHADOW_RENDER_ALTITUDE) {
 		return null;
 	}
 
@@ -81,7 +99,7 @@ export function calculateAllShadows(
 	plants: PlantForShadow[],
 	sunPosition: SunPosition
 ): ShadowData[] {
-	if (sunPosition.isNight || sunPosition.altitude < MIN_SUN_ALTITUDE) {
+	if (sunPosition.isNight || sunPosition.altitude < MIN_SHADOW_RENDER_ALTITUDE) {
 		return [];
 	}
 
@@ -91,6 +109,8 @@ export function calculateAllShadows(
 /**
  * Detect which plants are being shaded by other (taller) plants.
  * Uses a shadow cone approach - checks if a plant falls within another's shadow cone.
+ * Uses a higher altitude threshold than rendering because shading only meaningfully
+ * impacts photosynthesis when PAR levels are significant.
  *
  * @param plants - All plants with positions and heights
  * @param sunPosition - Current sun position
@@ -102,8 +122,8 @@ export function detectShadedPlants(
 ): Set<string> {
 	const shadedSet = new Set<string>();
 
-	// No shading when sun is too low
-	if (sunPosition.isNight || sunPosition.altitude < MIN_SUN_ALTITUDE) {
+	// No shading detection when sun is too low for meaningful photosynthetic impact
+	if (sunPosition.isNight || sunPosition.altitude < MIN_SHADE_DETECTION_ALTITUDE) {
 		return shadedSet;
 	}
 

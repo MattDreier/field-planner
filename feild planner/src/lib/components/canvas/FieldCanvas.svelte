@@ -819,8 +819,8 @@
 	<g transform="rotate({rotation}, {viewportWidth / 2}, {viewportHeight / 2})">
 
 	<!-- Shadow layer (below beds) -->
-	{#if sunSimulation.enabled && shadows.length > 0}
-		<ShadowLayer {shadows} {canvasState} />
+	{#if sunSimulation.enabled && shadows.length > 0 && sunPosition}
+		<ShadowLayer {shadows} {canvasState} sunAltitude={sunPosition.altitude} />
 	{/if}
 
 	<!-- Beds -->
