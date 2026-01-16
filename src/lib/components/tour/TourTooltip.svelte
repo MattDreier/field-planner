@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { skipTour, completeTour, TOUR_STEPS } from '$lib/stores/tour.svelte';
+	import { skipTour, completeTour, nextStep, prevStep, TOUR_STEPS } from '$lib/stores/tour.svelte';
 
 	interface Props {
 		title: string;
@@ -10,10 +10,55 @@
 		placement: 'top' | 'bottom' | 'left' | 'right';
 		targetRect: DOMRect | null;
 		offsetY?: number;
+		autoAdvanceMs?: number;
 		isFinalStep?: boolean;
+		canGoBack?: boolean;
+		canGoForward?: boolean;
 	}
 
-	let { title, description, currentStep, totalSteps, placement, targetRect, offsetY = 0, isFinalStep = false }: Props = $props();
+	let { title, description, currentStep, totalSteps, placement, targetRect, offsetY = 0, autoAdvanceMs, isFinalStep = false, canGoBack = false, canGoForward = false }: Props = $props();
+
+	// Auto-advance timer state
+	let timerProgress = $state(0); // 0 to 1
+	let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+	// Circular progress calculation (SVG stroke-dashoffset)
+	const circleRadius = 8;
+	const circleCircumference = 2 * Math.PI * circleRadius;
+	const strokeDashoffset = $derived(circleCircumference * (1 - timerProgress));
+
+	// Start/reset timer when step changes or autoAdvanceMs is set
+	$effect(() => {
+		// Clean up previous timer
+		if (timerInterval) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+		timerProgress = 0;
+
+		if (!autoAdvanceMs || isFinalStep) return;
+
+		const startTime = Date.now();
+		const duration = autoAdvanceMs;
+
+		timerInterval = setInterval(() => {
+			const elapsed = Date.now() - startTime;
+			timerProgress = Math.min(elapsed / duration, 1);
+
+			if (timerProgress >= 1) {
+				if (timerInterval) clearInterval(timerInterval);
+				timerInterval = null;
+				nextStep();
+			}
+		}, 50); // Update every 50ms for smooth animation
+
+		return () => {
+			if (timerInterval) {
+				clearInterval(timerInterval);
+				timerInterval = null;
+			}
+		};
+	});
 
 	// Calculate tooltip position based on target element and placement
 	const tooltipStyle = $derived.by(() => {
@@ -125,8 +170,20 @@
 			</div>
 		{/if}
 
-		<!-- Progress bar -->
+		<!-- Progress bar with navigation -->
 		<div class="flex items-center gap-2">
+			<!-- Back arrow -->
+			<button
+				class="w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+				disabled={!canGoBack}
+				onclick={prevStep}
+				aria-label="Previous step"
+			>
+				<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M15 18L9 12L15 6" />
+				</svg>
+			</button>
+
 			<div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
 				<div
 					class="h-full bg-primary rounded-full transition-all duration-300"
@@ -134,6 +191,48 @@
 				></div>
 			</div>
 			<span class="text-xs text-muted-foreground font-medium">{currentStep}/{totalSteps}</span>
+
+			<!-- Forward arrow (only visible when user has gone back) -->
+			{#if canGoForward}
+				<button
+					class="w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+					onclick={nextStep}
+					aria-label="Next step"
+				>
+					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path d="M9 6L15 12L9 18" />
+					</svg>
+				</button>
+			{/if}
+
+			{#if autoAdvanceMs && !isFinalStep}
+				<!-- Circular countdown timer -->
+				<svg width="20" height="20" class="transform -rotate-90">
+					<!-- Background circle -->
+					<circle
+						cx="10"
+						cy="10"
+						r={circleRadius}
+						fill="none"
+						stroke="currentColor"
+						stroke-width="3"
+						class="text-muted"
+					/>
+					<!-- Progress circle -->
+					<circle
+						cx="10"
+						cy="10"
+						r={circleRadius}
+						fill="none"
+						stroke="currentColor"
+						stroke-width="3"
+						stroke-linecap="round"
+						stroke-dasharray={circleCircumference}
+						stroke-dashoffset={strokeDashoffset}
+						class="text-primary"
+					/>
+				</svg>
+			{/if}
 		</div>
 	</div>
 </div>

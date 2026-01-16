@@ -938,7 +938,7 @@
 				phaseColor: plant.visibility.phaseColor,
 				phaseProgress: plant.visibility.phaseProgress
 			} : undefined}
-			dataTour={plantIndex === 0 ? 'first-placed-plant' : undefined}
+			dataTour={plantIndex === 0 ? 'first-placed-plant' : plantIndex === 1 ? 'second-placed-plant' : undefined}
 			onSelect={(id, shiftKey) => {
 				// Only clear planned selection on regular click, not shift+click (allows cross-type selection)
 				if (!shiftKey) {

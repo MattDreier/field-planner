@@ -10,7 +10,7 @@
 </script>
 
 <!-- On-canvas overlay positioned bottom-left, same stacking as MapControls (behind expanded timeline) -->
-<div class="absolute bottom-16 left-4 pointer-events-none">
+<div class="absolute bottom-16 left-4 pointer-events-none" data-tour="height-legend">
 	<div class="pointer-events-auto bg-zinc-800/95 backdrop-blur-sm rounded-lg shadow-lg px-3 py-2">
 		{#if minHeight === maxHeight}
 			<!-- Single height indicator -->

@@ -18,6 +18,8 @@ export interface TourStep {
 	placement: 'top' | 'bottom' | 'left' | 'right';
 	/** Optional: additional Y offset in pixels (negative = higher) */
 	offsetY?: number;
+	/** Optional: auto-advance after this many milliseconds (for informational steps) */
+	autoAdvanceMs?: number;
 	completionCondition: (state: TourAppState) => boolean;
 }
 
@@ -187,6 +189,36 @@ export const TOUR_STEPS: TourStep[] = [
 		completionCondition: (state) => state.timeSliderReleased
 	},
 	{
+		id: 'seasonal-shadows',
+		title: 'Watch Shadows Through the Seasons',
+		description:
+			"Drag the timeline scrubber between the Last Frost and First Frost markers. Watch how shadows shift as the sun's position changes throughout the year, and see your plants grow!",
+		targetSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="garden-content"]'],
+		placement: 'left',
+		completionCondition: (state) => state.timelineScrubberReleased
+	},
+	{
+		id: 'collapse-timeline',
+		title: 'Collapse the Timeline',
+		description:
+			'Click the down arrow to collapse the timeline panel and get a full view of your garden.',
+		targetSelector: '[data-tour="timeline-toggle"]',
+		placement: 'top',
+		completionCondition: (state) => state.timelinePanelOpen === false
+	},
+	{
+		id: 'height-legend',
+		title: 'Understanding Plant Heights',
+		description:
+			'The color legend shows plant heights. Shorter plants are blue, taller plants are red. This helps you plan your garden so tall plants don\'t shade shorter ones!',
+		targetSelector: '[data-tour="height-legend"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]', '[data-tour="second-placed-plant"]'],
+		placement: 'right',
+		autoAdvanceMs: 6000,
+		completionCondition: () => false
+	},
+	{
 		id: 'sign-in',
 		title: 'Save Your Garden',
 		description:
@@ -206,6 +238,8 @@ export const tourState = $state({
 	showWelcome: false,
 	currentStepIndex: 0,
 	hasSeenTour: false,
+	// Track the furthest step the user has reached (for back/forward navigation)
+	furthestStepIndex: 0,
 	// Track previous values for comparison-based conditions
 	previousState: null as TourAppState | null,
 	// Prevent multiple step completions during rapid state changes
@@ -238,6 +272,7 @@ export function startTour(): void {
 	tourState.showWelcome = false;
 	tourState.isActive = true;
 	tourState.currentStepIndex = 1; // Skip welcome step (index 0)
+	tourState.furthestStepIndex = 1; // Reset furthest step when starting fresh
 	tourState.previousState = null;
 	tourState.isAdvancing = false;
 }
@@ -254,9 +289,31 @@ export function skipTour(): void {
 export function nextStep(): void {
 	if (tourState.currentStepIndex < TOUR_STEPS.length - 1) {
 		tourState.currentStepIndex++;
+		// Track the furthest step reached
+		if (tourState.currentStepIndex > tourState.furthestStepIndex) {
+			tourState.furthestStepIndex = tourState.currentStepIndex;
+		}
 	} else {
 		completeTour();
 	}
+}
+
+// Move to previous step
+export function prevStep(): void {
+	// Minimum step is 1 (step 0 is the welcome modal)
+	if (tourState.currentStepIndex > 1) {
+		tourState.currentStepIndex--;
+	}
+}
+
+// Check if user can go back to a previous step
+export function canGoBack(): boolean {
+	return tourState.currentStepIndex > 1;
+}
+
+// Check if user can go forward (only to previously visited steps)
+export function canGoForward(): boolean {
+	return tourState.currentStepIndex < tourState.furthestStepIndex;
 }
 
 // Complete the tour
@@ -280,6 +337,7 @@ export function resetTour(): void {
 	tourState.isActive = false;
 	tourState.showWelcome = false;
 	tourState.currentStepIndex = 0;
+	tourState.furthestStepIndex = 0;
 	tourState.previousState = null;
 	tourState.isAdvancing = false;
 	if (typeof window !== 'undefined') {
