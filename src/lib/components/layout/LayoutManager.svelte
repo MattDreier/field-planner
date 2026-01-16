@@ -132,7 +132,7 @@
 		Demo Mode
 	</span>
 {:else if !isSignedIn}
-	<Button size="sm" onclick={() => onSignIn?.()} class="gap-2">
+	<Button size="sm" onclick={() => onSignIn?.()} class="gap-2" data-tour="sign-in">
 		<LogIn class="h-4 w-4" />
 		<span>Sign in to save</span>
 	</Button>

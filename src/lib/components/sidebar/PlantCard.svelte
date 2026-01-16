@@ -19,6 +19,7 @@
 	onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 	role="button"
 	tabindex="0"
+	data-tour="flower-{flower.id}"
 >
 	<div class="flex items-start justify-between gap-2">
 		<div class="min-w-0">

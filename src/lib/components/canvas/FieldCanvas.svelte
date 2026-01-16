@@ -865,6 +865,7 @@
 	ondragover={handleDragOver}
 	role="application"
 	aria-label="Garden field planner canvas"
+	data-tour="canvas"
 >
 	<!-- SVG filter definitions -->
 	<defs>
@@ -892,32 +893,34 @@
 		<ShadowLayer {shadows} {canvasState} sunAltitude={sunPosition.altitude} />
 	{/if}
 
-	<!-- Beds -->
-	{#each beds as bed (bed._id)}
-		{@const canvasPos = fieldToCanvas(bed.x, bed.y, canvasState)}
-		{@const dims = getBedDimensionsInInches(bed)}
-		{@const widthPx = dims.width * pixelsPerInch * zoom}
-		{@const heightPx = dims.height * pixelsPerInch * zoom}
-		<Bed
-			{bed}
-			x={canvasPos.x}
-			y={canvasPos.y}
-			widthPixels={widthPx}
-			heightPixels={heightPx}
-			{pixelsPerInch}
-			{zoom}
-			isSelected={selectedBedIds.has(bed._id)}
-			{selectedBedIds}
-			onSelect={onSelectBed}
-			onMove={handleBedMove}
-			{onMoveStart}
-			onMoveEnd={handleMoveEnd}
-			onResize={onResizeBed}
-			onRotate={onRotateBed}
-		/>
-	{/each}
+	<!-- Beds and Plants group (for tour spotlight targeting) -->
+	<g data-tour="garden-content">
+		<!-- Beds -->
+		{#each beds as bed (bed._id)}
+			{@const canvasPos = fieldToCanvas(bed.x, bed.y, canvasState)}
+			{@const dims = getBedDimensionsInInches(bed)}
+			{@const widthPx = dims.width * pixelsPerInch * zoom}
+			{@const heightPx = dims.height * pixelsPerInch * zoom}
+			<Bed
+				{bed}
+				x={canvasPos.x}
+				y={canvasPos.y}
+				widthPixels={widthPx}
+				heightPixels={heightPx}
+				{pixelsPerInch}
+				{zoom}
+				isSelected={selectedBedIds.has(bed._id)}
+				{selectedBedIds}
+				onSelect={onSelectBed}
+				onMove={handleBedMove}
+				{onMoveStart}
+				onMoveEnd={handleMoveEnd}
+				onResize={onResizeBed}
+				onRotate={onRotateBed}
+			/>
+		{/each}
 
-	<!-- Placed Plants -->
+		<!-- Placed Plants -->
 	{#each plantsWithPositions as plant (plant._id)}
 		<PlantMarker
 			{plant}
@@ -972,6 +975,7 @@
 			onMove={(id, deltaX, deltaY) => handlePlannedPlantMove(id, deltaX, deltaY, planned)}
 		/>
 	{/each}
+	</g>
 
 	<!-- Smart guides overlay (rendered on top during drag) -->
 	{#if activeGuides.length > 0 || activeDiagonalGuides.length > 0 || activeDistances.length > 0}

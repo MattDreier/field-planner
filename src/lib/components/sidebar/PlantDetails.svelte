@@ -8,11 +8,40 @@
 		flowerId: string;
 		selectedPlant?: PlacedPlant | null;
 		onClose: () => void;
+		onScrolledToBottom?: () => void;
 	}
 
-	let { flowerId, selectedPlant = null, onClose }: Props = $props();
+	let { flowerId, selectedPlant = null, onClose, onScrolledToBottom }: Props = $props();
 
 	const flower = $derived(getFlowerById(flowerId));
+
+	// Scroll-to-bottom detection for tour
+	let sentinelElement: HTMLDivElement | null = $state(null);
+	let hasTriggeredScroll = $state(false);
+
+	// Set up IntersectionObserver when sentinel element is available
+	$effect(() => {
+		if (!sentinelElement || !onScrolledToBottom) return;
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting && !hasTriggeredScroll) {
+					hasTriggeredScroll = true;
+					onScrolledToBottom();
+				}
+			},
+			{ threshold: 0.5 }
+		);
+		observer.observe(sentinelElement);
+
+		return () => observer.disconnect();
+	});
+
+	// Reset scroll trigger when flowerId changes
+	$effect(() => {
+		flowerId; // dependency
+		hasTriggeredScroll = false;
+	});
 
 	function formatRange(min: number, max?: number, unit: string = ''): string {
 		if (max && max !== min) {
@@ -25,6 +54,7 @@
 {#if flower}
 	<aside
 		class="w-80 border-l border-border bg-card flex flex-col overflow-hidden animate-in slide-in-from-right duration-200"
+		data-tour="details-panel"
 	>
 		<!-- Header -->
 		<div class="flex items-start justify-between p-4 border-b border-border">
@@ -32,7 +62,7 @@
 				<h2 class="text-lg font-semibold">{flower.name}</h2>
 				<p class="text-sm text-muted-foreground italic">{flower.scientificName}</p>
 			</div>
-			<Button variant="ghost" size="icon" onclick={onClose} aria-label="Close panel">
+			<Button variant="ghost" size="icon" onclick={onClose} aria-label="Close panel" data-tour="close-details">
 				<X class="w-4 h-4" />
 			</Button>
 		</div>
@@ -214,6 +244,9 @@
 					<p class="text-sm text-muted-foreground">{flower.specialNotes}</p>
 				</div>
 			{/if}
+
+			<!-- Sentinel for scroll detection (invisible) -->
+			<div bind:this={sentinelElement} class="h-1" aria-hidden="true"></div>
 		</div>
 	</aside>
 {/if}

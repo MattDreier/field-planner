@@ -11,15 +11,18 @@
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
-	import { Plus, Undo2, Redo2 } from 'lucide-svelte';
+	import { Plus, Undo2, Redo2, HelpCircle } from 'lucide-svelte';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
 	import { timelineState, togglePanel, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
 	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
+	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
 	import { SignedIn, SignedOut, UserButton, useClerkContext } from 'svelte-clerk';
+	import { WelcomeModal, TourOverlay } from '$lib/components/tour';
+	import { tourState, initializeTour, startTour, checkStepCompletion, type TourAppState } from '$lib/stores/tour.svelte';
 	import { setupConvexAuth } from '$lib/stores/auth.svelte';
 	import { useConvexClient, useQuery } from 'convex-svelte';
 	import { api } from '../convex/_generated/api';
@@ -109,6 +112,9 @@
 		timeOfDay: 0.5 // noon
 	});
 
+	// Tour-specific state: tracks when time slider is released (for tour step completion)
+	let timeSliderReleased = $state(false);
+
 	// Derive shadow month from timeline's current view date
 	// Use continuous month value (0-11.99) for smooth sun position interpolation
 	const shadowMonth = $derived.by(() => {
@@ -145,6 +151,13 @@
 	$effect(() => {
 		untrack(() => {
 			history.initialize([], []);
+		});
+	});
+
+	// Initialize tour (check localStorage for first-time visitors)
+	$effect(() => {
+		untrack(() => {
+			initializeTour();
 		});
 	});
 
@@ -288,6 +301,80 @@
 
 	// Determine which flower to show in details panel (placed plant takes priority)
 	const detailsFlowerId = $derived(selectedPlant?.flowerId ?? viewingFlowerId);
+
+	// Track when user scrolls to bottom of details panel (for tour)
+	let detailsScrolledToBottom = $state(false);
+
+	// Reset scroll tracking when details panel closes or flower changes
+	$effect(() => {
+		if (!detailsFlowerId) {
+			detailsScrolledToBottom = false;
+		}
+	});
+
+	// Calculate first plant's phase dates for tour completion conditions
+	const firstPlantPhaseDates = $derived.by(() => {
+		if (plants.length === 0) return { growingStart: undefined, harvestStart: undefined };
+
+		const firstPlant = plants[0];
+		if (!firstPlant.plantingDates) return { growingStart: undefined, harvestStart: undefined };
+
+		const flower = FLOWER_DATABASE.find(f => f.id === firstPlant.flowerId);
+		if (!flower) return { growingStart: undefined, harvestStart: undefined };
+
+		const phases = calculateLifecyclePhases(firstPlant.plantingDates, flower);
+
+		// Find the outdoor "growing" phase (labeled "Growing outdoors")
+		const growingPhase = phases.find(p => p.phase === 'growing' && p.label === 'Growing outdoors');
+		// Find the harvest-window phase
+		const harvestPhase = phases.find(p => p.phase === 'harvest-window');
+
+		return {
+			growingStart: growingPhase ? formatDateISO(growingPhase.startDate) : undefined,
+			growingEnd: growingPhase ? formatDateISO(growingPhase.endDate) : undefined,
+			harvestStart: harvestPhase ? formatDateISO(harvestPhase.startDate) : undefined,
+			harvestEnd: harvestPhase ? formatDateISO(harvestPhase.endDate) : undefined
+		};
+	});
+
+	// Tour state tracking - gather all state needed for completion checking
+	// Must be defined after detailsFlowerId since it depends on it
+	const appStateForTour = $derived<TourAppState>({
+		currentTool,
+		bedsLength: beds.length,
+		plantsLength: plants.length,
+		detailsFlowerId,
+		detailsScrolledToBottom,
+		timelinePanelOpen: timelineState.isPanelOpen,
+		currentViewDate: timelineState.currentViewDate,
+		viewScale: timelineState.viewScale,
+		latitude: timelineState.gardenSettings.latitude,
+		timeOfDay: sunSimulationBase.timeOfDay,
+		timeSliderReleased,
+		firstPlantGrowingStart: firstPlantPhaseDates.growingStart,
+		firstPlantHarvestStart: firstPlantPhaseDates.harvestStart
+	});
+
+	// Check tour step completion reactively
+	// Use untrack to prevent the state update inside checkStepCompletion from causing infinite loops
+	$effect(() => {
+		const isActive = tourState.isActive;
+		const currentState = appStateForTour;
+		if (isActive) {
+			untrack(() => {
+				checkStepCompletion(currentState);
+			});
+		}
+	});
+
+	// Reset tour-specific state flags when step changes
+	$effect(() => {
+		const _stepIndex = tourState.currentStepIndex;
+		// Reset flags when entering any step (they'll be set again by user actions)
+		untrack(() => {
+			timeSliderReleased = false;
+		});
+	});
 
 	// Bed creation handler
 	function handleCreateBed(
@@ -836,6 +923,20 @@
 				</Button>
 			</div>
 
+			<!-- Start Tour button (only for unauthenticated users) -->
+			{#if !convexAvailable || !(auth?.isSignedIn)}
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={startTour}
+					title="Start guided tour"
+					class="gap-2"
+				>
+					<HelpCircle class="h-4 w-4" />
+					<span class="hidden sm:inline">Tour</span>
+				</Button>
+			{/if}
+
 			<ModeToggle />
 
 			<LayoutManager
@@ -881,6 +982,7 @@
 				onUpdateSunSimulation={handleUpdateSunSimulation}
 				onUpdateBedDefaults={(updates) => bedDefaults = { ...bedDefaults, ...updates }}
 				onToggleSnap={() => snapEnabled = !snapEnabled}
+				onTimeSliderRelease={() => timeSliderReleased = true}
 			/>
 
 			{#if currentTool === 'select'}
@@ -951,6 +1053,9 @@
 					selectedPlantIds = new Set();
 					viewingFlowerId = null;
 				}}
+				onScrolledToBottom={() => {
+					detailsScrolledToBottom = true;
+				}}
 			/>
 		{/if}
 	</div>
@@ -963,4 +1068,8 @@
 			onClose={closeSuccessionPlanner}
 		/>
 	{/if}
+
+	<!-- Guided tour components -->
+	<WelcomeModal />
+	<TourOverlay />
 </div>

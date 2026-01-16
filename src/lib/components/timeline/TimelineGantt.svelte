@@ -4,6 +4,13 @@
 	import { groupEntriesByBed, parseDate, formatDateISO, type TimelineEntry } from '$lib/utils/timeline';
 	import { timelineState, setCurrentViewDate, setViewYear } from '$lib/stores/timeline.svelte';
 
+	interface TourMarkerDates {
+		growingStart?: Date;
+		growingEnd?: Date;
+		harvestStart?: Date;
+		harvestEnd?: Date;
+	}
+
 	interface Props {
 		entries: TimelineEntry[];
 		beds: Bed[];
@@ -11,9 +18,10 @@
 		viewYear: number;
 		viewScale: TimelineViewScale;
 		onUpdatePlantDates?: (plantId: string, dates: PlantingDates) => void;
+		tourMarkerDates?: TourMarkerDates | null;
 	}
 
-	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates }: Props = $props();
+	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates, tourMarkerDates }: Props = $props();
 
 	// Scrubber drag state
 	let isDraggingScrubber = $state(false);
@@ -429,6 +437,7 @@
 		class:overflow-x-hidden={viewScale === 'month'}
 		bind:this={scrollContainer}
 		onscroll={handleScroll}
+		data-tour="timeline-chart"
 	>
 		<svg
 			width={chartWidth}
@@ -756,6 +765,56 @@
 					</text>
 				</g>
 			</g>
+
+			<!-- Tour marker elements (invisible, for tooltip positioning) -->
+			<!-- Positioned at top of header so tooltip appears above the spotlight area -->
+			<!-- X positions are centered over the actual phase bars when a plant exists -->
+			{#if tourMarkerDates?.growingStart && tourMarkerDates?.growingEnd}
+				{@const growingMidpoint = new Date((tourMarkerDates.growingStart.getTime() + tourMarkerDates.growingEnd.getTime()) / 2)}
+				<rect
+					x={dateToX(growingMidpoint) - 40}
+					y={0}
+					width={80}
+					height={20}
+					fill="transparent"
+					data-tour="phase-growing"
+					class="pointer-events-none"
+				/>
+			{:else}
+				<!-- Fallback: default position when no plant exists -->
+				<rect
+					x={dateToX(new Date(timelineState.viewYear, 5, 15)) - 40}
+					y={0}
+					width={80}
+					height={20}
+					fill="transparent"
+					data-tour="phase-growing"
+					class="pointer-events-none"
+				/>
+			{/if}
+			{#if tourMarkerDates?.harvestStart && tourMarkerDates?.harvestEnd}
+				{@const harvestMidpoint = new Date((tourMarkerDates.harvestStart.getTime() + tourMarkerDates.harvestEnd.getTime()) / 2)}
+				<rect
+					x={dateToX(harvestMidpoint) - 40}
+					y={0}
+					width={80}
+					height={20}
+					fill="transparent"
+					data-tour="phase-harvest"
+					class="pointer-events-none"
+				/>
+			{:else}
+				<!-- Fallback: default position when no plant exists -->
+				<rect
+					x={dateToX(new Date(timelineState.viewYear, 7, 15)) - 40}
+					y={0}
+					width={80}
+					height={20}
+					fill="transparent"
+					data-tour="phase-harvest"
+					class="pointer-events-none"
+				/>
+			{/if}
 		</svg>
 	</div>
 </div>

@@ -111,6 +111,25 @@
 		{ value: 'month', label: 'Month' },
 		{ value: 'season', label: 'Season' }
 	] as const;
+
+	// Calculate tour marker dates based on first plant's phases
+	// Used to position the tour tooltips centered over the actual phase bars
+	const tourMarkerDates = $derived.by(() => {
+		if (timelineEntries.length === 0) return null;
+
+		const firstEntry = timelineEntries[0];
+		const growingPhase = firstEntry.phases.find(p => p.phase === 'growing' && p.label === 'Growing outdoors');
+		const harvestPhase = firstEntry.phases.find(p => p.phase === 'harvest-window');
+
+		if (!growingPhase && !harvestPhase) return null;
+
+		return {
+			growingStart: growingPhase?.startDate,
+			growingEnd: growingPhase?.endDate,
+			harvestStart: harvestPhase?.startDate,
+			harvestEnd: harvestPhase?.endDate
+		};
+	});
 </script>
 
 <!-- Timeline Panel - positioned at bottom of canvas area -->
@@ -123,6 +142,7 @@
 		type="button"
 		onclick={togglePanel}
 		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 hover:bg-accent/50 transition-colors cursor-pointer"
+		data-tour="timeline-toggle"
 	>
 		<div class="flex items-center gap-3">
 			<Calendar class="h-4 w-4 text-muted-foreground" />
@@ -163,6 +183,7 @@
 						class="h-8 pl-2 pr-6 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3csvg%20xmlns%3d%22http%3a%2f%2fwww.w3.org%2f2000%2fsvg%22%20width%3d%2212%22%20height%3d%2212%22%20viewBox%3d%220%200%2024%2024%22%20fill%3d%22none%22%20stroke%3d%22%239ca3af%22%20stroke-width%3d%222%22%3e%3cpath%20d%3d%22m6%209%206%206%206-6%22%2f%3e%3c%2fsvg%3e')] bg-[length:12px] bg-[right_0.5rem_center] bg-no-repeat"
 						value={timelineState.viewScale}
 						onchange={(e) => setViewScale(e.currentTarget.value as 'day' | 'week' | 'month' | 'season')}
+						data-tour="view-scale"
 					>
 						{#each viewScaleOptions as opt}
 							<option value={opt.value}>{opt.label}</option>
@@ -213,6 +234,7 @@
 						viewYear={timelineState.viewYear}
 						viewScale={timelineState.viewScale}
 						{onUpdatePlantDates}
+						{tourMarkerDates}
 					/>
 				</div>
 			</div>

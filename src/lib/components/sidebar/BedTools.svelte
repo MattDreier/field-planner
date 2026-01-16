@@ -4,6 +4,7 @@
 	import type { Tool, Bed, SunSimulationState } from '$lib/types';
 	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
 	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
+	import { setLatitude } from '$lib/stores/timeline.svelte';
 
 	interface BedDefaults {
 		widthFeet: number;
@@ -26,6 +27,7 @@
 		onUpdateSunSimulation: (state: Partial<SunSimulationState>) => void;
 		onUpdateBedDefaults: (defaults: Partial<BedDefaults>) => void;
 		onToggleSnap?: () => void;
+		onTimeSliderRelease?: () => void;
 	}
 
 	let {
@@ -42,7 +44,8 @@
 		onRotateBed,
 		onUpdateSunSimulation,
 		onUpdateBedDefaults,
-		onToggleSnap
+		onToggleSnap,
+		onTimeSliderRelease
 	}: Props = $props();
 
 	// Expanded mode when any tool other than select is active
@@ -164,7 +167,8 @@
 		const target = e.target as HTMLInputElement;
 		const value = parseFloat(target.value);
 		if (!isNaN(value) && value >= -90 && value <= 90) {
-			onUpdateSunSimulation({ latitude: value });
+			// Update latitude in timeline store (the source of truth for shadow calculations)
+			setLatitude(value);
 		}
 	}
 
@@ -186,7 +190,8 @@
 				});
 			});
 
-			onUpdateSunSimulation({ latitude: position.coords.latitude });
+			// Update latitude in timeline store (the source of truth for shadow calculations)
+			setLatitude(position.coords.latitude);
 		} catch (error) {
 			if (error instanceof GeolocationPositionError) {
 				switch (error.code) {
@@ -228,26 +233,31 @@
 				<MousePointer2 class="w-4 h-4" />
 			</ToggleGroup.Item>
 
-			<ToggleGroup.Item
-				value="rectangle"
-				title="Rectangle Bed (R)"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
-			>
-				<Square class="w-4 h-4" />
-			</ToggleGroup.Item>
+			<span class="inline-flex gap-1" data-tour="bed-tools">
+				<ToggleGroup.Item
+					value="rectangle"
+					title="Rectangle Bed (R)"
+					class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
+					data-tour="rectangle-tool"
+				>
+					<Square class="w-4 h-4" />
+				</ToggleGroup.Item>
 
-			<ToggleGroup.Item
-				value="circle"
-				title="Circle Bed (C)"
-				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
-			>
-				<Circle class="w-4 h-4" />
-			</ToggleGroup.Item>
+				<ToggleGroup.Item
+					value="circle"
+					title="Circle Bed (C)"
+					class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
+					data-tour="circle-tool"
+				>
+					<Circle class="w-4 h-4" />
+				</ToggleGroup.Item>
+			</span>
 
 			<ToggleGroup.Item
 				value="shadows"
 				title="Shadow Simulation"
 				class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background {sunSimulation.enabled && currentTool !== 'shadows' ? '!text-amber-500' : ''}"
+				data-tour="shadows-tool"
 			>
 				<Sun class="w-4 h-4" />
 			</ToggleGroup.Item>
@@ -460,7 +470,9 @@
 						step="0.01"
 						value={sunSimulation.timeOfDay}
 						oninput={handleTimeChange}
+						onchange={() => onTimeSliderRelease?.()}
 						class="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-amber-500"
+						data-tour="time-slider"
 					/>
 					<div class="flex justify-between text-[10px] text-muted-foreground/70">
 						<span>Sunrise</span>
@@ -477,6 +489,7 @@
 							onclick={requestGeolocation}
 							disabled={isRequestingLocation}
 							class="flex items-center gap-1 px-2 py-1.5 text-xs bg-muted hover:bg-muted/80 disabled:opacity-50 rounded transition-colors"
+							data-tour="my-location"
 						>
 							<MapPin class="w-3 h-3" />
 							{isRequestingLocation ? '...' : 'My Location'}
