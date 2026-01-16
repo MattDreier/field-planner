@@ -117,6 +117,7 @@ export const TOUR_STEPS: TourStep[] = [
 			'Drag the orange scrubber into the green "Growing" phase. Watch your flower grow as you move through time!',
 		targetSelector: '[data-tour="phase-growing"]',
 		spotlightSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]'],
 		placement: 'top',
 		completionCondition: (state) => {
 			// Complete when scrubber reaches the start of the first plant's growing phase
@@ -133,6 +134,7 @@ export const TOUR_STEPS: TourStep[] = [
 			'Keep dragging into the coral "Harvest" phase. See how your flower is now ready to cut!',
 		targetSelector: '[data-tour="phase-harvest"]',
 		spotlightSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]'],
 		placement: 'top',
 		completionCondition: (state) => {
 			// Complete when scrubber reaches the start of the first plant's harvest phase
