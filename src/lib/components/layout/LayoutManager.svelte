@@ -131,6 +131,11 @@
 	>
 		Demo Mode
 	</span>
+{:else if !isSignedIn}
+	<Button size="sm" onclick={() => onSignIn?.()} class="gap-2">
+		<LogIn class="h-4 w-4" />
+		<span>Sign in to save</span>
+	</Button>
 {:else}
 	<DropdownMenu.Root bind:open={dropdownOpen}>
 		<DropdownMenu.Trigger>
@@ -148,76 +153,62 @@
 
 		<DropdownMenu.Portal>
 			<DropdownMenu.Content class="w-56" align="end">
-				{#if !isSignedIn}
-					<!-- Not signed in - show sign in prompt -->
-					<DropdownMenu.Item onclick={() => { dropdownOpen = false; onSignIn?.(); }}>
-						<LogIn class="mr-2 h-4 w-4" />
-						<span>Sign in to save layouts</span>
+				<!-- Save actions -->
+				{#if currentLayoutId}
+					<DropdownMenu.Item onclick={handleSave} disabled={isSaving || !hasContent}>
+						<Save class="mr-2 h-4 w-4" />
+						<span>Save</span>
+						<DropdownMenu.Shortcut>⌘S</DropdownMenu.Shortcut>
 					</DropdownMenu.Item>
+				{/if}
+
+				<DropdownMenu.Item onclick={() => { dropdownOpen = false; showSaveAsDialog = true; }} disabled={!hasContent}>
+					<FilePlus class="mr-2 h-4 w-4" />
+					<span>{currentLayoutId ? 'Save as new...' : 'Save layout...'}</span>
+				</DropdownMenu.Item>
+
+				<DropdownMenu.Separator />
+
+				<!-- Saved layouts -->
+				{#if layouts.length > 0}
+					<DropdownMenu.Label>Your Layouts</DropdownMenu.Label>
+					<DropdownMenu.Group>
+						{#each layouts as layout}
+							<DropdownMenu.Item
+								onclick={() => handleLoad(layout._id)}
+								disabled={isLoading}
+								class="justify-between"
+							>
+								<span class="truncate">{layout.name}</span>
+								<span class="flex items-center gap-2">
+									{#if layout._id === currentLayoutId}
+										<Check class="h-4 w-4 text-primary" />
+									{:else}
+										<span class="text-xs text-muted-foreground">{formatDate(layout.createdAt)}</span>
+									{/if}
+								</span>
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
-					<DropdownMenu.Item onclick={handleNew}>
-						<FilePlus class="mr-2 h-4 w-4" />
-						<span>New layout</span>
-					</DropdownMenu.Item>
-				{:else}
-					<!-- Signed in - show full menu -->
-					<!-- Save actions -->
-					{#if currentLayoutId}
-						<DropdownMenu.Item onclick={handleSave} disabled={isSaving || !hasContent}>
-							<Save class="mr-2 h-4 w-4" />
-							<span>Save</span>
-							<DropdownMenu.Shortcut>⌘S</DropdownMenu.Shortcut>
-						</DropdownMenu.Item>
-					{/if}
+				{/if}
 
-					<DropdownMenu.Item onclick={() => { dropdownOpen = false; showSaveAsDialog = true; }} disabled={!hasContent}>
-						<FilePlus class="mr-2 h-4 w-4" />
-						<span>{currentLayoutId ? 'Save as new...' : 'Save layout...'}</span>
-					</DropdownMenu.Item>
+				<!-- New layout -->
+				<DropdownMenu.Item onclick={handleNew}>
+					<FilePlus class="mr-2 h-4 w-4" />
+					<span>New layout</span>
+				</DropdownMenu.Item>
 
+				<!-- Delete -->
+				{#if currentLayoutId}
 					<DropdownMenu.Separator />
-
-					<!-- Saved layouts -->
-					{#if layouts.length > 0}
-						<DropdownMenu.Label>Your Layouts</DropdownMenu.Label>
-						<DropdownMenu.Group>
-							{#each layouts as layout}
-								<DropdownMenu.Item
-									onclick={() => handleLoad(layout._id)}
-									disabled={isLoading}
-									class="justify-between"
-								>
-									<span class="truncate">{layout.name}</span>
-									<span class="flex items-center gap-2">
-										{#if layout._id === currentLayoutId}
-											<Check class="h-4 w-4 text-primary" />
-										{:else}
-											<span class="text-xs text-muted-foreground">{formatDate(layout.createdAt)}</span>
-										{/if}
-									</span>
-								</DropdownMenu.Item>
-							{/each}
-						</DropdownMenu.Group>
-						<DropdownMenu.Separator />
-					{/if}
-
-					<!-- New layout -->
-					<DropdownMenu.Item onclick={handleNew}>
-						<FilePlus class="mr-2 h-4 w-4" />
-						<span>New layout</span>
+					<DropdownMenu.Item
+						onclick={() => { dropdownOpen = false; showDeleteDialog = true; }}
+						class="text-destructive focus:text-destructive"
+					>
+						<Trash2 class="mr-2 h-4 w-4" />
+						<span>Delete layout</span>
 					</DropdownMenu.Item>
-
-					<!-- Delete -->
-					{#if currentLayoutId}
-						<DropdownMenu.Separator />
-						<DropdownMenu.Item
-							onclick={() => { dropdownOpen = false; showDeleteDialog = true; }}
-							class="text-destructive focus:text-destructive"
-						>
-							<Trash2 class="mr-2 h-4 w-4" />
-							<span>Delete layout</span>
-						</DropdownMenu.Item>
-					{/if}
 				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Portal>

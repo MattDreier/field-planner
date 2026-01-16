@@ -854,13 +854,10 @@
 			/>
 
 			<!-- User authentication button -->
-			{#if convexAvailable}
+{#if convexAvailable}
 				<SignedIn>
 					<UserButton />
 				</SignedIn>
-				<SignedOut>
-					<Button variant="outline" size="sm" onclick={handleSignIn}>Sign In</Button>
-				</SignedOut>
 			{/if}
 		</div>
 	</header>
