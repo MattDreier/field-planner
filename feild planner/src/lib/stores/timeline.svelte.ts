@@ -1,6 +1,6 @@
 import type { GardenSettings, PlannedPlant, PlantingDates } from '$lib/types';
 import type { Id } from '../../convex/_generated/dataModel';
-import { getFrostDatesFromZone } from '$lib/data/hardinessZones';
+import { getFrostDatesFromZone, getLatitudeFromZone } from '$lib/data/hardinessZones';
 import { formatDateISO } from '$lib/utils/timeline';
 
 // View scale options
@@ -26,7 +26,7 @@ export const timelineState = $state({
 		hardinessZone: '6b',
 		lastFrostDate: '',
 		firstFrostDate: '',
-		latitude: 40
+		latitude: 39 // Default for zone 6b, auto-updated when zone changes
 	} as GardenSettings,
 
 	// Planned plants (not yet placed on canvas)
@@ -95,6 +95,9 @@ export function setHardinessZone(zone: string) {
 	const frostDates = getFrostDatesFromZone(zone, timelineState.viewYear);
 	timelineState.gardenSettings.lastFrostDate = formatDateISO(frostDates.lastFrost);
 	timelineState.gardenSettings.firstFrostDate = formatDateISO(frostDates.firstFrost);
+
+	// Auto-populate latitude from zone (for sun angle calculations)
+	timelineState.gardenSettings.latitude = getLatitudeFromZone(zone);
 }
 
 export function setLastFrostDate(date: string) {

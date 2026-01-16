@@ -3,7 +3,7 @@
 	import PlantPalette from '$lib/components/sidebar/PlantPalette.svelte';
 	import BedTools from '$lib/components/sidebar/BedTools.svelte';
 	import PlantDetails from '$lib/components/sidebar/PlantDetails.svelte';
-	import HeightLegend from '$lib/components/layout/HeightLegend.svelte';
+	import HeightLegend from '$lib/components/canvas/HeightLegend.svelte';
 	import MapControls from '$lib/components/layout/MapControls.svelte';
 		import LayoutManager from '$lib/components/layout/LayoutManager.svelte';
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
@@ -64,11 +64,11 @@
 		rotation: 0
 	});
 
-	// Sun simulation state (default to zone 6b latitude ~40°N)
+	// Sun simulation state
+	// Latitude is derived from timeline's garden settings (synced with USDA zone)
 	// Month is derived from the timeline's currentViewDate for unified date control
-	let sunSimulationBase = $state<Omit<SunSimulationState, 'month'>>({
+	let sunSimulationBase = $state<Omit<SunSimulationState, 'month' | 'latitude'>>({
 		enabled: false,
-		latitude: 40,
 		timeOfDay: 0.5 // noon
 	});
 
@@ -83,9 +83,10 @@
 		return month + (dayOfMonth - 1) / daysInMonth;
 	});
 
-	// Full sun simulation state with derived month
+	// Full sun simulation state with derived month and latitude from garden settings
 	const sunSimulation = $derived<SunSimulationState>({
 		...sunSimulationBase,
+		latitude: timelineState.gardenSettings.latitude,
 		month: shadowMonth
 	});
 
@@ -295,9 +296,9 @@
 		);
 	}
 
-	// Sun simulation update handler (month is now controlled by timeline, so we filter it out)
+	// Sun simulation update handler (month and latitude are controlled by timeline/zone, so we filter them out)
 	function handleUpdateSunSimulation(update: Partial<SunSimulationState>) {
-		const { month: _month, ...rest } = update;
+		const { month: _month, latitude: _latitude, ...rest } = update;
 		sunSimulationBase = { ...sunSimulationBase, ...rest };
 	}
 
@@ -679,10 +680,7 @@
 				</div>
 			{/if}
 
-			{#if plants.length > 0}
-				<HeightLegend minHeight={heightRange().min} maxHeight={heightRange().max} />
-			{/if}
-		</aside>
+			</aside>
 
 		<!-- Canvas area (infinite canvas fills available space) -->
 		<main class="flex-1 overflow-hidden bg-muted/30 relative">
@@ -722,6 +720,9 @@
 				rotation={fieldRotation}
 				onRotate={handleFieldRotation}
 			/>
+			{#if plants.length > 0}
+				<HeightLegend minHeight={heightRange().min} maxHeight={heightRange().max} />
+			{/if}
 			<!-- Timeline panel -->
 			<TimelinePanel
 				{beds}
