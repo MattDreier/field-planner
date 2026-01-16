@@ -5,6 +5,7 @@
 	 * Opacity fades in based on sun altitude for a natural appearance.
 	 * A gradient makes the shadow tip fade to transparent.
 	 */
+	import { getEffectiveTheme } from '$lib/stores/theme.svelte';
 
 	interface Props {
 		cx: number; // plant center X in canvas pixels
@@ -30,44 +31,28 @@
 		cy - Math.cos((shadowAngle * Math.PI) / 180) * (shadowLengthPixels / 2)
 	);
 
-	// Unique gradient IDs for this shadow instance
-	const gradientIdLight = $derived(`shadow-gradient-light-${plantId}`);
-	const gradientIdDark = $derived(`shadow-gradient-dark-${plantId}`);
+	// Unique gradient ID for this shadow instance
+	const gradientId = $derived(`shadow-gradient-${plantId}`);
+
+	// Shadow color based on theme (black for light mode, white for dark mode)
+	const shadowColor = $derived(getEffectiveTheme() === 'dark' ? 'white' : 'black');
 </script>
 
-<!-- Gradient definitions -->
+<!-- Gradient definition with feathered tip -->
 <defs>
-	<!-- Light mode gradient: transparent at tip, opaque near plant -->
-	<linearGradient id={gradientIdLight} x1="0%" y1="0%" x2="0%" y2="100%">
-		<stop offset="0%" stop-color="black" stop-opacity="0" />
-		<stop offset="40%" stop-color="black" stop-opacity={opacity * 0.08} />
-		<stop offset="100%" stop-color="black" stop-opacity={opacity * 0.15} />
-	</linearGradient>
-	<!-- Dark mode gradient: transparent at tip, opaque near plant -->
-	<linearGradient id={gradientIdDark} x1="0%" y1="0%" x2="0%" y2="100%">
-		<stop offset="0%" stop-color="white" stop-opacity="0" />
-		<stop offset="40%" stop-color="white" stop-opacity={opacity * 0.12} />
-		<stop offset="100%" stop-color="white" stop-opacity={opacity * 0.25} />
+	<linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+		<stop offset="0%" stop-color={shadowColor} stop-opacity="0" />
+		<stop offset="40%" stop-color={shadowColor} stop-opacity={opacity * 0.15} />
+		<stop offset="100%" stop-color={shadowColor} stop-opacity={opacity * 0.35} />
 	</linearGradient>
 </defs>
 
-<!-- Light mode shadow -->
 <ellipse
 	cx={ellipseCenterX}
 	cy={ellipseCenterY}
 	rx={shadowWidth / 2}
 	ry={shadowLengthPixels / 2}
 	transform="rotate({shadowAngle}, {ellipseCenterX}, {ellipseCenterY})"
-	fill="url(#{gradientIdLight})"
-	class="pointer-events-none dark:hidden"
-/>
-<!-- Dark mode shadow -->
-<ellipse
-	cx={ellipseCenterX}
-	cy={ellipseCenterY}
-	rx={shadowWidth / 2}
-	ry={shadowLengthPixels / 2}
-	transform="rotate({shadowAngle}, {ellipseCenterX}, {ellipseCenterY})"
-	fill="url(#{gradientIdDark})"
-	class="pointer-events-none hidden dark:block"
+	fill="url(#{gradientId})"
+	class="pointer-events-none"
 />
