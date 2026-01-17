@@ -27,10 +27,58 @@
 
 	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates, onScrubberRelease }: Props = $props();
 
+	// Local panel height state (resets when panel closes/opens)
+	const DEFAULT_PANEL_HEIGHT = 200;
+	const MIN_PANEL_HEIGHT = 150;
+
+	let panelHeight = $state(DEFAULT_PANEL_HEIGHT);
+	let isDragging = $state(false);
+	let dragStartY = $state(0);
+	let dragStartHeight = $state(0);
+
+	// Calculate max height (50% of viewport)
+	const maxPanelHeight = $derived(
+		typeof window !== 'undefined' ? window.innerHeight * 0.5 : 400
+	);
+
 	// Initialize frost dates on first render
 	$effect(() => {
 		initializeGardenSettings();
 	});
+
+	// Reset height when panel opens
+	$effect(() => {
+		if (timelineState.isPanelOpen) {
+			panelHeight = DEFAULT_PANEL_HEIGHT;
+		}
+	});
+
+	// Drag handlers for resize
+	function handleDragStart(e: MouseEvent | TouchEvent) {
+		isDragging = true;
+		dragStartY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+		dragStartHeight = panelHeight;
+		document.addEventListener('mousemove', handleDrag);
+		document.addEventListener('mouseup', handleDragEnd);
+		document.addEventListener('touchmove', handleDrag);
+		document.addEventListener('touchend', handleDragEnd);
+	}
+
+	function handleDrag(e: MouseEvent | TouchEvent) {
+		if (!isDragging) return;
+		const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+		const delta = dragStartY - clientY; // Dragging up increases height
+		const newHeight = Math.max(MIN_PANEL_HEIGHT, Math.min(maxPanelHeight, dragStartHeight + delta));
+		panelHeight = newHeight;
+	}
+
+	function handleDragEnd() {
+		isDragging = false;
+		document.removeEventListener('mousemove', handleDrag);
+		document.removeEventListener('mouseup', handleDragEnd);
+		document.removeEventListener('touchmove', handleDrag);
+		document.removeEventListener('touchend', handleDragEnd);
+	}
 
 	// Build flower lookup map
 	const flowerMap = $derived.by(() => {
@@ -209,10 +257,25 @@
 		</div>
 	</button>
 
+	<!-- Resize handle -->
+	<div
+		class="h-2 border-x border-border cursor-ns-resize flex items-center justify-center transition-colors select-none touch-none {isDragging ? 'bg-primary/30' : 'bg-card hover:bg-primary/20'}"
+		onmousedown={handleDragStart}
+		ontouchstart={handleDragStart}
+		role="slider"
+		aria-label="Resize timeline panel"
+		aria-valuenow={panelHeight}
+		aria-valuemin={MIN_PANEL_HEIGHT}
+		aria-valuemax={maxPanelHeight}
+		tabindex="0"
+	>
+		<div class="w-8 h-1 bg-muted-foreground/40 rounded-full"></div>
+	</div>
+
 	<!-- Panel content -->
 	<div
 		class="bg-card border-x border-b border-border overflow-hidden"
-		style="height: {timelineState.panelHeight}px"
+		style="height: {panelHeight}px"
 	>
 		{#if timelineEntries.length === 0}
 			<!-- Empty state -->
