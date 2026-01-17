@@ -19,7 +19,7 @@
 	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
 	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
 	import { SignedIn, SignedOut, UserButton, useClerkContext } from 'svelte-clerk';
 	import { WelcomeModal, TourOverlay } from '$lib/components/tour';
 	import { tourState, initializeTour, startTour, checkStepCompletion, type TourAppState } from '$lib/stores/tour.svelte';
@@ -160,6 +160,23 @@
 		untrack(() => {
 			initializeTour();
 		});
+	});
+
+	// Fix Safari viewport height issue - set CSS variable from actual window height
+	onMount(() => {
+		const setAppHeight = () => {
+			document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+		};
+		setAppHeight();
+		window.addEventListener('resize', setAppHeight);
+		// Also update on orientation change for mobile devices
+		window.addEventListener('orientationchange', () => {
+			// Small delay to let Safari recalculate after orientation change
+			setTimeout(setAppHeight, 100);
+		});
+		return () => {
+			window.removeEventListener('resize', setAppHeight);
+		};
 	});
 
 	// Derived: get the currently selected bed (for single-selection UI like resize panel)
@@ -891,7 +908,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="flex flex-col h-screen h-[100svh]">
+<div class="flex flex-col" style="height: var(--app-height, 100svh);">
 	<!-- Header -->
 	<header class="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
 		<div>
