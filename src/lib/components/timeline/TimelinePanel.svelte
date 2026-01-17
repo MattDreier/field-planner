@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { ChevronUp, ChevronDown, Calendar, Plus } from 'lucide-svelte';
-	import { Button } from '$lib/components/ui/button';
 	import TimelineGantt from './TimelineGantt.svelte';
 	import TimelineLegend from './TimelineLegend.svelte';
 	import {
@@ -318,10 +317,13 @@
 
 					<!-- Add succession button -->
 					{#if onOpenSuccessionPlanner}
-						<Button variant="outline" size="sm" class="h-8 text-xs border-border" onclick={onOpenSuccessionPlanner}>
-							<Plus class="h-3 w-3 mr-1" />
+						<button
+							class="h-8 px-3 text-xs bg-background border border-border rounded-md hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring flex items-center gap-1"
+							onclick={onOpenSuccessionPlanner}
+						>
+							<Plus class="h-3 w-3" />
 							Succession
-						</Button>
+						</button>
 					{/if}
 				</div>
 			{/if}
