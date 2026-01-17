@@ -36,6 +36,7 @@
 	let isDragging = $state(false);
 	let dragStartY = $state(0);
 	let dragStartHeight = $state(0);
+	let openedViaDrag = $state(false);
 
 	// Calculate max height (50% of viewport)
 	const maxPanelHeight = $derived(
@@ -47,17 +48,22 @@
 		initializeGardenSettings();
 	});
 
-	// Reset height when panel opens
+	// Reset height when panel opens (unless opened via drag)
 	$effect(() => {
 		if (timelineState.isPanelOpen) {
-			panelHeight = DEFAULT_PANEL_HEIGHT;
+			if (!openedViaDrag) {
+				panelHeight = DEFAULT_PANEL_HEIGHT;
+			}
+			openedViaDrag = false;
 		}
 	});
 
 	// Drag handlers for resize
 	function handleDragStart(e: MouseEvent | TouchEvent) {
-		// If panel is closed, open it first so dragging works
+		// If panel is closed, open it at minimum height and let user drag to desired size
 		if (!timelineState.isPanelOpen) {
+			openedViaDrag = true;
+			panelHeight = MIN_PANEL_HEIGHT;
 			openPanel();
 		}
 		isDragging = true;
