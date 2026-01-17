@@ -36,7 +36,7 @@
 	let isDragging = $state(false);
 	let dragStartY = $state(0);
 	let dragStartHeight = $state(0);
-	let openedViaDrag = $state(false);
+	let pendingOpen = $state(false); // True when handle grabbed on closed panel, waiting for drag
 
 	// Calculate max height (50% of viewport)
 	const maxPanelHeight = $derived(
@@ -48,27 +48,26 @@
 		initializeGardenSettings();
 	});
 
-	// Reset height when panel opens (unless opened via drag)
+	// Reset height when panel opens via header click (not drag)
 	$effect(() => {
-		if (timelineState.isPanelOpen) {
-			if (!openedViaDrag) {
-				panelHeight = DEFAULT_PANEL_HEIGHT;
-			}
-			openedViaDrag = false;
+		if (timelineState.isPanelOpen && !isDragging && !pendingOpen) {
+			panelHeight = DEFAULT_PANEL_HEIGHT;
 		}
 	});
 
 	// Drag handlers for resize
 	function handleDragStart(e: MouseEvent | TouchEvent) {
-		// If panel is closed, open it at minimum height and let user drag to desired size
-		if (!timelineState.isPanelOpen) {
-			openedViaDrag = true;
-			panelHeight = MIN_PANEL_HEIGHT;
-			openPanel();
-		}
 		isDragging = true;
 		dragStartY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-		dragStartHeight = panelHeight;
+
+		if (!timelineState.isPanelOpen) {
+			// Panel is closed - wait for actual drag movement before opening
+			pendingOpen = true;
+			dragStartHeight = MIN_PANEL_HEIGHT;
+		} else {
+			dragStartHeight = panelHeight;
+		}
+
 		document.addEventListener('mousemove', handleDrag);
 		document.addEventListener('mouseup', handleDragEnd);
 		document.addEventListener('touchmove', handleDrag);
@@ -77,6 +76,14 @@
 
 	function handleDrag(e: MouseEvent | TouchEvent) {
 		if (!isDragging) return;
+
+		// If we have a pending open, do it now on first movement
+		if (pendingOpen) {
+			panelHeight = MIN_PANEL_HEIGHT;
+			openPanel();
+			pendingOpen = false;
+		}
+
 		const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 		const delta = dragStartY - clientY; // Dragging up increases height
 		const newHeight = Math.max(MIN_PANEL_HEIGHT, Math.min(maxPanelHeight, dragStartHeight + delta));
@@ -84,6 +91,12 @@
 	}
 
 	function handleDragEnd() {
+		// If we grabbed handle but didn't move, treat as click - open to default
+		if (pendingOpen) {
+			pendingOpen = false;
+			openPanel();
+		}
+
 		isDragging = false;
 		document.removeEventListener('mousemove', handleDrag);
 		document.removeEventListener('mouseup', handleDragEnd);
