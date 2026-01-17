@@ -184,7 +184,7 @@
 <!-- Timeline Panel - positioned at bottom of canvas area -->
 <div
 	class="absolute bottom-0 left-0 right-0 z-20 transition-transform duration-300 ease-in-out"
-	class:translate-y-[calc(100%-48px)]={!timelineState.isPanelOpen}
+	class:translate-y-[calc(100%-72px)]={!timelineState.isPanelOpen}
 >
 	<!-- Resize handle - floating above drawer in canvas space (absolutely positioned) -->
 	<div
