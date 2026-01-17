@@ -5,8 +5,6 @@
 	import TimelineLegend from './TimelineLegend.svelte';
 	import {
 		timelineState,
-		togglePanel,
-		openPanel,
 		setHardinessZone,
 		setViewScale,
 		initializeGardenSettings
@@ -28,81 +26,123 @@
 
 	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates, onScrubberRelease }: Props = $props();
 
-	// Local panel height state (resets when panel closes/opens)
-	const DEFAULT_PANEL_HEIGHT = 200;
-	const MIN_PANEL_HEIGHT = 150;
+	// Panel height state (starts closed)
+	let contentHeight = $state(0);
 
-	let panelHeight = $state(DEFAULT_PANEL_HEIGHT);
+	// Track parent container height for max constraint
+	let containerElement: HTMLDivElement | null = $state(null);
+	let parentHeight = $state(600);
+
+	// Update parent height on mount and resize
+	$effect(() => {
+		if (!containerElement?.parentElement) return;
+
+		const updateParentHeight = () => {
+			if (containerElement?.parentElement) {
+				parentHeight = containerElement.parentElement.clientHeight;
+			}
+		};
+
+		updateParentHeight();
+
+		const resizeObserver = new ResizeObserver(updateParentHeight);
+		resizeObserver.observe(containerElement.parentElement);
+
+		return () => resizeObserver.disconnect();
+	});
+
+	// Max height is middle of canvas (50% of parent minus header)
+	const maxHeight = $derived(Math.max(200, (parentHeight - 48) / 2));
+
+	// Derived states
+	const isOpen = $derived(contentHeight > 0);
+
+	// Sync local isOpen state to the store (for tour completion detection)
+	$effect(() => {
+		timelineState.isPanelOpen = isOpen;
+	});
+
+	// Default open height (used when toggling open)
+	const defaultOpenHeight = $derived(Math.min(300, maxHeight));
+
+	// Toggle panel open/closed
+	function togglePanel() {
+		contentHeight = isOpen ? 0 : defaultOpenHeight;
+	}
+
+	// Drag state
 	let isDragging = $state(false);
+	let hasDragged = $state(false); // Track if actual movement occurred
 	let dragStartY = $state(0);
 	let dragStartHeight = $state(0);
-	let pendingOpen = $state(false); // True when handle grabbed on closed panel, waiting for drag
 
-	// Calculate max height (50% of viewport)
-	const maxPanelHeight = $derived(
-		typeof window !== 'undefined' ? window.innerHeight * 0.5 : 400
-	);
+	function handleMouseDown(e: MouseEvent) {
+		isDragging = true;
+		hasDragged = false;
+		dragStartY = e.clientY;
+		dragStartHeight = contentHeight;
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+	}
+
+	function handleMouseMove(e: MouseEvent) {
+		if (!isDragging) return;
+		// Dragging up (negative deltaY) should increase height
+		const deltaY = dragStartY - e.clientY;
+		// Only count as drag if moved more than 3px
+		if (Math.abs(deltaY) > 3) {
+			hasDragged = true;
+		}
+		const newHeight = Math.max(0, Math.min(maxHeight, dragStartHeight + deltaY));
+		contentHeight = newHeight;
+	}
+
+	function handleMouseUp() {
+		// If no drag occurred, treat as click to toggle
+		if (!hasDragged) {
+			togglePanel();
+		}
+		isDragging = false;
+		hasDragged = false;
+		document.removeEventListener('mousemove', handleMouseMove);
+		document.removeEventListener('mouseup', handleMouseUp);
+	}
+
+	// Touch support
+	function handleTouchStart(e: TouchEvent) {
+		if (e.touches.length !== 1) return;
+		isDragging = true;
+		hasDragged = false;
+		dragStartY = e.touches[0].clientY;
+		dragStartHeight = contentHeight;
+		document.addEventListener('touchmove', handleTouchMove);
+		document.addEventListener('touchend', handleTouchEnd);
+	}
+
+	function handleTouchMove(e: TouchEvent) {
+		if (!isDragging || e.touches.length !== 1) return;
+		const deltaY = dragStartY - e.touches[0].clientY;
+		if (Math.abs(deltaY) > 3) {
+			hasDragged = true;
+		}
+		const newHeight = Math.max(0, Math.min(maxHeight, dragStartHeight + deltaY));
+		contentHeight = newHeight;
+	}
+
+	function handleTouchEnd() {
+		if (!hasDragged) {
+			togglePanel();
+		}
+		isDragging = false;
+		hasDragged = false;
+		document.removeEventListener('touchmove', handleTouchMove);
+		document.removeEventListener('touchend', handleTouchEnd);
+	}
 
 	// Initialize frost dates on first render
 	$effect(() => {
 		initializeGardenSettings();
 	});
-
-	// Reset height when panel opens via header click (not drag)
-	$effect(() => {
-		if (timelineState.isPanelOpen && !isDragging && !pendingOpen) {
-			panelHeight = DEFAULT_PANEL_HEIGHT;
-		}
-	});
-
-	// Drag handlers for resize
-	function handleDragStart(e: MouseEvent | TouchEvent) {
-		isDragging = true;
-		dragStartY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-		if (!timelineState.isPanelOpen) {
-			// Panel is closed - wait for actual drag movement before opening
-			pendingOpen = true;
-			dragStartHeight = MIN_PANEL_HEIGHT;
-		} else {
-			dragStartHeight = panelHeight;
-		}
-
-		document.addEventListener('mousemove', handleDrag);
-		document.addEventListener('mouseup', handleDragEnd);
-		document.addEventListener('touchmove', handleDrag);
-		document.addEventListener('touchend', handleDragEnd);
-	}
-
-	function handleDrag(e: MouseEvent | TouchEvent) {
-		if (!isDragging) return;
-
-		// If we have a pending open, do it now on first movement
-		if (pendingOpen) {
-			panelHeight = MIN_PANEL_HEIGHT;
-			openPanel();
-			pendingOpen = false;
-		}
-
-		const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-		const delta = dragStartY - clientY; // Dragging up increases height
-		const newHeight = Math.max(MIN_PANEL_HEIGHT, Math.min(maxPanelHeight, dragStartHeight + delta));
-		panelHeight = newHeight;
-	}
-
-	function handleDragEnd() {
-		// If we grabbed handle but didn't move, treat as click - open to default
-		if (pendingOpen) {
-			pendingOpen = false;
-			openPanel();
-		}
-
-		isDragging = false;
-		document.removeEventListener('mousemove', handleDrag);
-		document.removeEventListener('mouseup', handleDragEnd);
-		document.removeEventListener('touchmove', handleDrag);
-		document.removeEventListener('touchend', handleDragEnd);
-	}
 
 	// Build flower lookup map
 	const flowerMap = $derived.by(() => {
@@ -206,36 +246,36 @@
 </script>
 
 <!-- Timeline Panel - positioned at bottom of canvas area -->
-<div
-	class="absolute bottom-0 left-0 right-0 z-20 transition-transform duration-300 ease-in-out"
-	class:translate-y-[calc(100%-48px)]={!timelineState.isPanelOpen}
->
-	<!-- Resize handle - floating above drawer in canvas space (absolutely positioned) -->
+<div class="absolute bottom-0 left-0 right-0 z-20" bind:this={containerElement}>
+	<!-- Resize handle - draggable to open/close panel -->
 	<div
-		class="absolute -top-6 left-0 right-0 h-6 cursor-ns-resize flex items-center justify-center select-none touch-none"
-		onmousedown={handleDragStart}
-		ontouchstart={handleDragStart}
+		class="absolute -top-6 left-0 right-0 h-6 flex items-center justify-center select-none cursor-ns-resize"
 		role="slider"
-		aria-label="Resize timeline panel"
-		aria-valuenow={panelHeight}
-		aria-valuemin={MIN_PANEL_HEIGHT}
-		aria-valuemax={maxPanelHeight}
+		aria-label="Drag to resize timeline panel"
+		aria-valuemin={0}
+		aria-valuemax={maxHeight}
+		aria-valuenow={contentHeight}
 		tabindex="0"
+		onmousedown={handleMouseDown}
+		ontouchstart={handleTouchStart}
 	>
-		<div class="w-12 h-1.5 rounded-full transition-colors {isDragging ? 'bg-primary' : 'bg-muted-foreground/50 hover:bg-muted-foreground'}"></div>
+		<div class="w-12 h-1.5 rounded-full bg-muted-foreground/50 hover:bg-muted-foreground/70 transition-colors"></div>
 	</div>
 
-	<!-- Panel header / collapse handle -->
-	<button
-		type="button"
-		onclick={togglePanel}
-		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 hover:bg-accent/50 transition-colors cursor-pointer"
+	<!-- Panel header - clickable to toggle -->
+	<div
+		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 cursor-pointer"
 		data-tour="timeline-toggle"
+		role="button"
+		tabindex="0"
+		aria-expanded={isOpen}
+		aria-label={isOpen ? 'Collapse timeline panel' : 'Expand timeline panel'}
+		onclick={togglePanel}
+		onkeydown={(e) => e.key === 'Enter' && togglePanel()}
 	>
 		<div class="flex items-center gap-3">
 			<Calendar class="h-4 w-4 text-muted-foreground" />
 			<span class="font-medium">Timeline</span>
-			<span class="text-xs text-muted-foreground">(T)</span>
 			{#if timelineEntries.length > 0}
 				<span class="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
 					{timelineEntries.length} {timelineEntries.length === 1 ? 'plant' : 'plants'}
@@ -244,16 +284,14 @@
 		</div>
 
 		<div class="flex items-center gap-3">
-			{#if timelineState.isPanelOpen}
-				<!-- Controls visible when open -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
+			{#if isOpen}
+				<!-- Controls visible when open - stop propagation to prevent toggle -->
 				<div
 					class="flex items-center gap-2"
-					onclick={(e) => e.stopPropagation()}
-					onkeydown={(e) => e.stopPropagation()}
 					role="group"
 					aria-label="Timeline controls"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
 				>
 					<!-- Zone selector -->
 					<select
@@ -288,18 +326,18 @@
 				</div>
 			{/if}
 
-			{#if timelineState.isPanelOpen}
+			{#if isOpen}
 				<ChevronDown class="h-4 w-4 text-muted-foreground" />
 			{:else}
 				<ChevronUp class="h-4 w-4 text-muted-foreground" />
 			{/if}
 		</div>
-	</button>
+	</div>
 
-	<!-- Panel content -->
+	<!-- Panel content - height controlled by contentHeight, animated when not dragging -->
 	<div
 		class="bg-card border-x border-b border-border overflow-hidden"
-		style="height: {panelHeight}px"
+		style="height: {contentHeight}px;{isDragging ? '' : ' transition: height 0.25s cubic-bezier(0.22, 1, 0.36, 1);'}"
 	>
 		{#if timelineEntries.length === 0}
 			<!-- Empty state -->

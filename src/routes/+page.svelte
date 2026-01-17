@@ -15,7 +15,7 @@
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
-	import { timelineState, togglePanel, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
+	import { timelineState, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
 	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
 	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
@@ -675,12 +675,6 @@
 			// Clear selection
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
-		}
-
-		// Toggle timeline panel with 'T'
-		if (e.key === 't' || e.key === 'T') {
-			e.preventDefault();
-			togglePanel();
 		}
 
 		// Toggle snap alignment with 'S'
