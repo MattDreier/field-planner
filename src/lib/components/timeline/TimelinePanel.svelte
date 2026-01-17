@@ -184,13 +184,28 @@
 <!-- Timeline Panel - positioned at bottom of canvas area -->
 <div
 	class="absolute bottom-0 left-0 right-0 z-20 transition-transform duration-300 ease-in-out"
-	class:translate-y-[calc(100%-48px)]={!timelineState.isPanelOpen}
+	class:translate-y-[calc(100%-56px)]={!timelineState.isPanelOpen}
 >
+	<!-- Resize handle - at top of drawer -->
+	<div
+		class="h-2 border-t border-x border-border rounded-t-lg cursor-ns-resize flex items-center justify-center transition-colors select-none touch-none {isDragging ? 'bg-primary/30' : 'bg-card hover:bg-primary/20'}"
+		onmousedown={handleDragStart}
+		ontouchstart={handleDragStart}
+		role="slider"
+		aria-label="Resize timeline panel"
+		aria-valuenow={panelHeight}
+		aria-valuemin={MIN_PANEL_HEIGHT}
+		aria-valuemax={maxPanelHeight}
+		tabindex="0"
+	>
+		<div class="w-8 h-1 bg-muted-foreground/40 rounded-full"></div>
+	</div>
+
 	<!-- Panel header / collapse handle -->
 	<button
 		type="button"
 		onclick={togglePanel}
-		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 hover:bg-accent/50 transition-colors cursor-pointer"
+		class="w-full h-12 bg-card border-x border-border flex items-center justify-between px-4 hover:bg-accent/50 transition-colors cursor-pointer"
 		data-tour="timeline-toggle"
 	>
 		<div class="flex items-center gap-3">
@@ -256,21 +271,6 @@
 			{/if}
 		</div>
 	</button>
-
-	<!-- Resize handle -->
-	<div
-		class="h-2 border-x border-border cursor-ns-resize flex items-center justify-center transition-colors select-none touch-none {isDragging ? 'bg-primary/30' : 'bg-card hover:bg-primary/20'}"
-		onmousedown={handleDragStart}
-		ontouchstart={handleDragStart}
-		role="slider"
-		aria-label="Resize timeline panel"
-		aria-valuenow={panelHeight}
-		aria-valuemin={MIN_PANEL_HEIGHT}
-		aria-valuemax={maxPanelHeight}
-		tabindex="0"
-	>
-		<div class="w-8 h-1 bg-muted-foreground/40 rounded-full"></div>
-	</div>
 
 	<!-- Panel content -->
 	<div
