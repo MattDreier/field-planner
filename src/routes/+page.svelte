@@ -891,7 +891,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="flex flex-col h-screen h-[100dvh]">
+<div class="flex flex-col h-screen h-[100svh]">
 	<!-- Header -->
 	<header class="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
 		<div>
