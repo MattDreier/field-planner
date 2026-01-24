@@ -416,36 +416,11 @@ export function isSegmentSunFacing(
 	const sunX = Math.sin(azimuthRad); // East component
 	const sunY = -Math.cos(azimuthRad); // North is -Y in SVG
 
-	// Segment is sun-facing if outward normal has positive projection toward sun
+	// Segment casts shadow if outward normal points AWAY from sun
+	// (the edge blocks light when its outward face is opposite the sun direction)
 	const dotWithSun = normalX * sunX + normalY * sunY;
 
-	return dotWithSun > 0;
-}
-
-/**
- * Create a synthetic interior point for fence segments.
- * Uses the "left side" convention - the interior is on the left
- * when traveling from start to end.
- */
-function getFenceInteriorPoint(
-	start: { x: number; y: number },
-	end: { x: number; y: number }
-): { x: number; y: number } {
-	// Segment midpoint
-	const midX = (start.x + end.x) / 2;
-	const midY = (start.y + end.y) / 2;
-
-	// Segment direction
-	const dx = end.x - start.x;
-	const dy = end.y - start.y;
-
-	// "Left" perpendicular in SVG coords (where +Y is down)
-	// Rotating (dx, dy) 90° CCW gives (-dy, dx)
-	// Offset by a small amount to create interior point
-	return {
-		x: midX - dy * 0.1, // Small offset to left side
-		y: midY + dx * 0.1
-	};
+	return dotWithSun < 0;
 }
 
 // ============================================================================
@@ -514,15 +489,11 @@ export function calculateFenceShadows(
 		const offsetY = -Math.cos(angleRad) * shadowLength; // Negative because Y increases downward
 
 		// Process each segment (pair of adjacent vertices)
+		// Fences are thin walls - ALL segments cast shadows (no interior/exterior concept)
+		// The shadow offset direction already ensures shadows fall away from the sun
 		for (let i = 0; i < fence.vertices.length - 1; i++) {
 			const start = fence.vertices[i];
 			const end = fence.vertices[i + 1];
-
-			// Check if segment is sun-facing using left-side convention
-			const interiorPoint = getFenceInteriorPoint(start, end);
-			if (!isSegmentSunFacing(start, end, sunPosition.azimuth, interiorPoint)) {
-				continue; // Skip segments facing away from sun
-			}
 
 			// Create quadrilateral: base segment + projected shadow endpoints
 			const quadrilateral = {
