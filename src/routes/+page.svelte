@@ -9,7 +9,7 @@
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import type { Tool, DragSource, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2, HelpCircle } from 'lucide-svelte';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
@@ -101,7 +101,8 @@
 	let bedDefaults = $state({
 		widthFeet: 4,
 		heightFeet: 8,
-		rotation: 0
+		rotation: 0,
+		raisedBedHeightFeet: 0
 	});
 
 	// Sun simulation state
@@ -134,9 +135,12 @@
 		month: shadowMonth
 	});
 
-	// Local state for beds and plants
+	// Local state for beds, plants, and fences
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
+	let fences = $state<Fence[]>([]);
+	let selectedFenceIds = $state<Set<Id<'fences'>>>(new Set());
+	let fenceDefaults = $state({ heightFeet: 6 });
 
 	// Track unsaved changes by comparing current state to last saved state
 	const hasUnsavedChanges = $derived.by(() => {
@@ -271,8 +275,36 @@
 				selectedPlantIds = new Set([id]);
 			}
 			selectedBedIds = new Set();
+			selectedFenceIds = new Set();
 		}
 		viewingFlowerId = null; // Clear palette selection when selecting a placed plant
+	}
+
+	function selectFence(id: Id<'fences'> | null, shiftKey = false) {
+		if (id === null) {
+			selectedFenceIds = new Set();
+			return;
+		}
+
+		if (shiftKey) {
+			// Shift+click: toggle in selection
+			const newSet = new Set(selectedFenceIds);
+			if (newSet.has(id)) {
+				newSet.delete(id);
+			} else {
+				newSet.add(id);
+			}
+			selectedFenceIds = newSet;
+		} else {
+			// Regular click: single selection (toggle if same)
+			if (selectedFenceIds.size === 1 && selectedFenceIds.has(id)) {
+				selectedFenceIds = new Set();
+			} else {
+				selectedFenceIds = new Set([id]);
+			}
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+		}
 	}
 
 	// Handle clicking a flower in the palette
@@ -400,6 +432,7 @@
 			widthFeet,
 			...(shape === 'rectangle' ? { heightFeet: heightFeet! } : {}),
 			rotation: bedDefaults.rotation, // Apply default rotation to new beds
+			raisedBedHeightFeet: bedDefaults.raisedBedHeightFeet, // Apply default raised height
 			createdAt: Date.now()
 		} as Bed;
 		beds = [...beds, newBed];
@@ -431,6 +464,15 @@
 	function handleRotateBed(id: Id<'beds'>, rotation: number) {
 		beds = beds.map((b) =>
 			b._id === id ? { ...b, rotation } : b
+		);
+	}
+
+	// Bed raised height handler
+	function handleUpdateBedRaisedHeight(id: Id<'beds'>, raisedBedHeightFeet: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+		beds = beds.map((b) =>
+			b._id === id ? { ...b, raisedBedHeightFeet } : b
 		);
 	}
 
@@ -528,9 +570,54 @@
 		);
 	}
 
+	// Fence creation handler
+	function handleCreateFence(vertices: FenceVertex[], heightFeet: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
+		const newFence: Fence = {
+			_id: `fence-${Date.now()}` as Id<'fences'>,
+			layoutId: 'local-layout' as Id<'layouts'>,
+			vertices,
+			heightFeet,
+			createdAt: Date.now()
+		};
+		fences = [...fences, newFence];
+		setTool('select');
+	}
+
+	// Fence move handler (moves entire fence by delta inches)
+	function handleMoveFence(id: Id<'fences'>, deltaX: number, deltaY: number) {
+		fences = fences.map((f) =>
+			f._id === id
+				? {
+					...f,
+					vertices: f.vertices.map(v => ({
+						x: v.x + deltaX,
+						y: v.y + deltaY
+					}))
+				}
+				: f
+		);
+	}
+
+	// Fence vertex move handler
+	function handleMoveVertex(fenceId: Id<'fences'>, vertexIndex: number, newX: number, newY: number) {
+		fences = fences.map((f) =>
+			f._id === fenceId
+				? {
+					...f,
+					vertices: f.vertices.map((v, i) =>
+						i === vertexIndex ? { x: newX, y: newY } : v
+					)
+				}
+				: f
+		);
+	}
+
 	// Delete handler - supports multi-selection
 	function handleDelete() {
-		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0) {
+		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0 || selectedFenceIds.size > 0) {
 			// Save state before mutation
 			history.push(beds, plants);
 
@@ -548,8 +635,14 @@
 				beds = beds.filter((b) => !selectedBedIds.has(b._id));
 			}
 
+			// Delete selected fences
+			if (selectedFenceIds.size > 0) {
+				fences = fences.filter((f) => !selectedFenceIds.has(f._id));
+			}
+
 			selectedPlantIds = new Set();
 			selectedBedIds = new Set();
+			selectedFenceIds = new Set();
 		}
 	}
 
@@ -675,6 +768,13 @@
 			// Clear selection
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
+			selectedFenceIds = new Set();
+		}
+
+		// Fence tool shortcut
+		if (e.key === 'f' || e.key === 'F') {
+			e.preventDefault();
+			setTool('fence');
 		}
 
 		// Toggle snap alignment with 'S'
@@ -967,18 +1067,21 @@
 		<aside class="w-80 border-r border-border bg-card flex flex-col overflow-hidden">
 			<BedTools
 				currentTool={currentTool}
-				hasSelection={!!selectedBedId || !!selectedPlantId}
+				hasSelection={!!selectedBedId || !!selectedPlantId || selectedFenceIds.size > 0}
 				{selectedBed}
 				{sunSimulation}
 				{bedDefaults}
+				{fenceDefaults}
 				{snapEnabled}
 				{snapTemporarilyDisabled}
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
+				onUpdateBedRaisedHeight={(id, height) => handleUpdateBedRaisedHeight(id as Id<'beds'>, height)}
 				onUpdateSunSimulation={handleUpdateSunSimulation}
 				onUpdateBedDefaults={(updates) => bedDefaults = { ...bedDefaults, ...updates }}
+				onUpdateFenceDefaults={(updates) => fenceDefaults = { ...fenceDefaults, ...updates }}
 				onToggleSnap={() => snapEnabled = !snapEnabled}
 				onTimeSliderRelease={() => timeSliderReleased = true}
 			/>
@@ -1003,17 +1106,24 @@
 				tool={currentTool}
 				{beds}
 				{plants}
+				{fences}
 				{selectedBedIds}
 				{selectedPlantIds}
+				{selectedFenceIds}
 				{dragSource}
 				{sunSimulation}
 				{bedDefaults}
+				{fenceDefaults}
 				onSelectBed={selectBed}
 				onSelectPlant={selectPlant}
+				onSelectFence={selectFence}
 				onCreateBed={handleCreateBed}
+				onCreateFence={handleCreateFence}
 				onMoveBed={handleMoveBed}
 				onResizeBed={handleResizeBed}
 				onRotateBed={handleRotateBed}
+				onMoveFence={handleMoveFence}
+				onMoveVertex={handleMoveVertex}
 				onPlacePlant={handlePlacePlant}
 				onMovePlant={handleMovePlant}
 				onMoveStart={handleMoveStart}

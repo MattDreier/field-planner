@@ -1,11 +1,12 @@
 <script lang="ts">
 	import GridBackground from './GridBackground.svelte';
 	import Bed from './Bed.svelte';
+	import FenceComponent from './Fence.svelte';
 	import PlantMarker from './PlantMarker.svelte';
 	import ShadowLayer from './ShadowLayer.svelte';
 	import SmartGuides from './SmartGuides.svelte';
 	import SelectionDistance from './SelectionDistance.svelte';
-	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Tool, DragSource, SunSimulationState } from '$lib/types';
+	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, FenceVertex, Tool, DragSource, SunSimulationState } from '$lib/types';
 	import { getBedDimensionsInInches } from '$lib/types';
 	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
@@ -23,7 +24,7 @@
 		type SelectionDistanceResult
 	} from '$lib/utils/smartGuides';
 	import { calculateSunPosition } from '$lib/utils/sun';
-	import { calculateAllShadows, detectShadedPlants } from '$lib/utils/shadow';
+	import { calculateAllShadows, calculateFenceShadows, calculateBedShadows, detectShadedPlants, fencesToStructures, bedsToStructures, type BedForShadow } from '$lib/utils/shadow';
 	import { calculateLifecyclePhases, getPlantVisibilityAtDate, getPlantHeightAtDate, type LifecyclePhase, type PlantVisibility } from '$lib/utils/timeline';
 	import { timelineState, updatePlannedPlantPosition } from '$lib/stores/timeline.svelte';
 	import { getFlowerById, type FlowerData } from '$lib/data/flowers';
@@ -34,6 +35,11 @@
 		widthFeet: number;
 		heightFeet: number;
 		rotation: number;
+		raisedBedHeightFeet?: number;
+	}
+
+	interface FenceDefaults {
+		heightFeet: number;
 	}
 
 	interface Props {
@@ -46,17 +52,24 @@
 		tool: Tool;
 		beds: BedType[];
 		plants: PlacedPlantType[];
+		fences?: FenceType[];
 		selectedBedIds: Set<Id<'beds'>>;
 		selectedPlantIds: Set<Id<'placedPlants'>>;
+		selectedFenceIds?: Set<Id<'fences'>>;
 		dragSource: DragSource;
 		sunSimulation: SunSimulationState;
 		bedDefaults?: BedDefaults;
+		fenceDefaults?: FenceDefaults;
 		onSelectBed: (id: Id<'beds'> | null, shiftKey?: boolean) => void;
 		onSelectPlant: (id: Id<'placedPlants'> | null, shiftKey?: boolean) => void;
+		onSelectFence?: (id: Id<'fences'> | null, shiftKey?: boolean) => void;
 		onCreateBed: (shape: 'rectangle' | 'circle', x: number, y: number, widthFeet: number, heightFeet?: number) => void;
+		onCreateFence?: (vertices: FenceVertex[], heightFeet: number) => void;
 		onMoveBed: (id: Id<'beds'>, newX: number, newY: number) => void;
 		onResizeBed: (id: Id<'beds'>, newWidthFeet: number, newHeightFeet: number) => void;
 		onRotateBed: (id: Id<'beds'>, rotation: number) => void;
+		onMoveFence?: (id: Id<'fences'>, deltaX: number, deltaY: number) => void;
+		onMoveVertex?: (fenceId: Id<'fences'>, vertexIndex: number, x: number, y: number) => void;
 		onPlacePlant: (bedId: Id<'beds'>, flowerId: string, name: string, x: number, y: number, spacingMin: number, heightMax: number) => void;
 		onMovePlant: (id: Id<'placedPlants'>, x: number, y: number) => void;
 		onMoveStart?: () => void; // Called once when a drag/resize begins (for history snapshot)
@@ -75,17 +88,24 @@
 		tool,
 		beds,
 		plants,
+		fences = [],
 		selectedBedIds,
 		selectedPlantIds,
+		selectedFenceIds = new Set(),
 		dragSource,
 		sunSimulation,
-		bedDefaults = { widthFeet: 4, heightFeet: 8, rotation: 0 },
+		bedDefaults = { widthFeet: 4, heightFeet: 8, rotation: 0, raisedBedHeightFeet: 0 },
+		fenceDefaults = { heightFeet: 6 },
 		onSelectBed,
 		onSelectPlant,
+		onSelectFence,
 		onCreateBed,
+		onCreateFence,
 		onMoveBed,
 		onResizeBed,
 		onRotateBed,
+		onMoveFence,
+		onMoveVertex,
 		onPlacePlant,
 		onMovePlant,
 		onMoveStart,
@@ -471,10 +491,57 @@
 		return calculateAllShadows(allPlantsForShadow, sunPosition);
 	});
 
-	// Detect which plants are being shaded (placed + planned)
+	// Calculate fence shadows
+	const fenceShadows = $derived.by(() => {
+		if (!sunPosition || sunPosition.isNight || fences.length === 0) return [];
+		const fencesForShadow = fences.map(f => ({
+			id: f._id,
+			vertices: f.vertices,
+			heightFeet: f.heightFeet
+		}));
+		return calculateFenceShadows(fencesForShadow, sunPosition);
+	});
+
+	// Prepare beds for shadow calculations (only raised beds cast shadows)
+	const bedsForShadow = $derived.by((): BedForShadow[] => {
+		return beds
+			.filter(b => (b.raisedBedHeightFeet ?? 0) > 0)
+			.map(b => ({
+				id: b._id,
+				x: b.x,
+				y: b.y,
+				widthInches: b.widthFeet * 12,
+				heightInches: (b.shape === 'rectangle' ? b.heightFeet : b.widthFeet) * 12,
+				raisedBedHeightFeet: b.raisedBedHeightFeet ?? 0,
+				rotation: b.rotation,
+				shape: b.shape
+			}));
+	});
+
+	// Calculate bed shadows (for raised beds)
+	const bedShadows = $derived.by(() => {
+		if (!sunPosition || sunPosition.isNight || bedsForShadow.length === 0) return [];
+		return calculateBedShadows(bedsForShadow, sunPosition);
+	});
+
+	// Combined shadows for rendering (fence + bed shadows)
+	const allStructureShadows = $derived([...fenceShadows, ...bedShadows]);
+
+	// Detect which plants are being shaded (by plants, fences, AND raised beds)
 	const shadedPlants = $derived.by(() => {
 		if (!sunPosition || sunPosition.isNight) return new Set<string>();
-		return detectShadedPlants(allPlantsForShadow, sunPosition);
+
+		// Build structures array from fences and raised beds
+		const fencesForShadow = fences.map(f => ({
+			id: f._id,
+			vertices: f.vertices,
+			heightFeet: f.heightFeet
+		}));
+		const fenceStructures = fencesToStructures(fencesForShadow);
+		const bedStructures = bedsToStructures(bedsForShadow);
+		const allStructures = [...fenceStructures, ...bedStructures];
+
+		return detectShadedPlants(allPlantsForShadow, sunPosition, allStructures);
 	});
 
 	// Bed creation drag state
@@ -483,6 +550,29 @@
 	let bedStartY = $state(0);
 	let bedCurrentX = $state(0);
 	let bedCurrentY = $state(0);
+
+	// Fence creation state
+	let isCreatingFence = $state(false);
+	let fenceVertices = $state<Array<{ x: number; y: number }>>([]);
+	let fencePreviewPoint = $state<{ x: number; y: number } | null>(null);
+
+	// Finish fence creation (called by double-click or Enter key)
+	function finishFence() {
+		if (fenceVertices.length >= 2 && onCreateFence) {
+			onCreateFence(fenceVertices, fenceDefaults.heightFeet);
+		}
+		// Reset fence creation state
+		isCreatingFence = false;
+		fenceVertices = [];
+		fencePreviewPoint = null;
+	}
+
+	// Cancel fence creation (called by Escape key)
+	function cancelFence() {
+		isCreatingFence = false;
+		fenceVertices = [];
+		fencePreviewPoint = null;
+	}
 
 	function handleCanvasPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
@@ -495,6 +585,7 @@
 			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 			onSelectBed(null);
 			onSelectPlant(null);
+			onSelectFence?.(null);
 			selectedPlannedPlantIds = new Set(); // Clear planned plant selection too
 			return;
 		}
@@ -511,6 +602,17 @@
 			bedCurrentY = y;
 			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
 		}
+
+		// Fence tool: add vertex on click
+		if (tool === 'fence') {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			const canvasX = e.clientX - rect.left;
+			const canvasY = e.clientY - rect.top;
+			const fieldPos = canvasToField(canvasX, canvasY, canvasState);
+
+			isCreatingFence = true;
+			fenceVertices = [...fenceVertices, { x: fieldPos.x, y: fieldPos.y }];
+		}
 	}
 
 	function handleCanvasPointerMove(e: PointerEvent) {
@@ -525,10 +627,21 @@
 		}
 
 		// Handle bed creation
-		if (!isCreatingBed) return;
-		const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
-		bedCurrentX = e.clientX - rect.left;
-		bedCurrentY = e.clientY - rect.top;
+		if (isCreatingBed) {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			bedCurrentX = e.clientX - rect.left;
+			bedCurrentY = e.clientY - rect.top;
+			return;
+		}
+
+		// Handle fence preview
+		if (tool === 'fence' && isCreatingFence && fenceVertices.length > 0) {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			const canvasX = e.clientX - rect.left;
+			const canvasY = e.clientY - rect.top;
+			const fieldPos = canvasToField(canvasX, canvasY, canvasState);
+			fencePreviewPoint = { x: fieldPos.x, y: fieldPos.y };
+		}
 	}
 
 	function handleCanvasPointerUp(e: PointerEvent) {
@@ -627,6 +740,27 @@
 
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
+	}
+
+	// Double-click to finish fence
+	function handleDblClick(e: MouseEvent) {
+		if (tool === 'fence' && isCreatingFence && fenceVertices.length >= 2) {
+			e.preventDefault();
+			finishFence();
+		}
+	}
+
+	// Keyboard handler for fence tool (Enter to finish, Escape to cancel)
+	function handleKeyDown(e: KeyboardEvent) {
+		if (tool === 'fence' && isCreatingFence) {
+			if (e.key === 'Enter' && fenceVertices.length >= 2) {
+				e.preventDefault();
+				finishFence();
+			} else if (e.key === 'Escape') {
+				e.preventDefault();
+				cancelFence();
+			}
+		}
 	}
 
 	// Clear smart guides when drag ends
@@ -851,6 +985,23 @@
 		updatePlannedPlantPosition(id, clampedX, clampedY);
 	}
 
+	// Fence move handler - moves entire fence by delta
+	function handleFenceMove(id: Id<'fences'>, deltaX: number, deltaY: number, _allSelectedIds?: Set<Id<'fences'>>, _disableSnap?: boolean) {
+		if (!onMoveFence) return;
+
+		// Convert pixel delta to inches
+		const deltaInchesX = deltaX / (pixelsPerInch * zoom);
+		const deltaInchesY = deltaY / (pixelsPerInch * zoom);
+
+		onMoveFence(id, deltaInchesX, deltaInchesY);
+	}
+
+	// Fence vertex move handler - moves a single vertex
+	function handleFenceVertexMove(fenceId: Id<'fences'>, vertexIndex: number, newX: number, newY: number) {
+		if (!onMoveVertex) return;
+		onMoveVertex(fenceId, vertexIndex, newX, newY);
+	}
+
 </script>
 
 <svg
@@ -860,9 +1011,12 @@
 	onpointerdown={handleCanvasPointerDown}
 	onpointermove={handleCanvasPointerMove}
 	onpointerup={handleCanvasPointerUp}
+	ondblclick={handleDblClick}
+	onkeydown={handleKeyDown}
 	onwheel={handleWheel}
 	ondrop={handleDrop}
 	ondragover={handleDragOver}
+	tabindex="0"
 	role="application"
 	aria-label="Garden field planner canvas"
 	data-tour="canvas"
@@ -889,8 +1043,8 @@
 	<g transform="rotate({rotation}, {viewportWidth / 2}, {viewportHeight / 2})">
 
 	<!-- Shadow layer (below beds) -->
-	{#if sunSimulation.enabled && shadows.length > 0 && sunPosition}
-		<ShadowLayer {shadows} {canvasState} sunAltitude={sunPosition.altitude} />
+	{#if sunSimulation.enabled && (shadows.length > 0 || allStructureShadows.length > 0) && sunPosition}
+		<ShadowLayer {shadows} fenceShadows={allStructureShadows} {canvasState} sunAltitude={sunPosition.altitude} />
 	{/if}
 
 	<!-- Beds and Plants group (for tour spotlight targeting) -->
@@ -917,6 +1071,24 @@
 				onMoveEnd={handleMoveEnd}
 				onResize={onResizeBed}
 				onRotate={onRotateBed}
+			/>
+		{/each}
+
+		<!-- Fences -->
+		{#each fences as fence (fence._id)}
+			{@const canvasVertices = fence.vertices.map(v => fieldToCanvas(v.x, v.y, canvasState))}
+			<FenceComponent
+				{fence}
+				{canvasVertices}
+				{pixelsPerInch}
+				{zoom}
+				isSelected={selectedFenceIds.has(fence._id)}
+				{selectedFenceIds}
+				onSelect={(id, shiftKey) => onSelectFence?.(id, shiftKey)}
+				onMove={handleFenceMove}
+				onMoveVertex={handleFenceVertexMove}
+				{onMoveStart}
+				onMoveEnd={handleMoveEnd}
 			/>
 		{/each}
 
@@ -1030,6 +1202,51 @@
 				stroke-dasharray="8 4"
 			/>
 		{/if}
+	{/if}
+
+	<!-- Fence creation preview -->
+	{#if isCreatingFence && fenceVertices.length > 0}
+		{@const canvasVertices = fenceVertices.map(v => fieldToCanvas(v.x, v.y, canvasState))}
+		{@const previewCanvasPoint = fencePreviewPoint ? fieldToCanvas(fencePreviewPoint.x, fencePreviewPoint.y, canvasState) : null}
+
+		<!-- Placed vertices line -->
+		{#if canvasVertices.length >= 2}
+			<polyline
+				points={canvasVertices.map(v => `${v.x},${v.y}`).join(' ')}
+				fill="none"
+				stroke="rgb(120, 113, 108)"
+				stroke-width="3"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		{/if}
+
+		<!-- Preview line from last vertex to cursor -->
+		{#if previewCanvasPoint}
+			{@const lastVertex = canvasVertices[canvasVertices.length - 1]}
+			<line
+				x1={lastVertex.x}
+				y1={lastVertex.y}
+				x2={previewCanvasPoint.x}
+				y2={previewCanvasPoint.y}
+				stroke="rgb(120, 113, 108)"
+				stroke-width="3"
+				stroke-dasharray="8 4"
+				stroke-linecap="round"
+			/>
+		{/if}
+
+		<!-- Vertex markers -->
+		{#each canvasVertices as vertex, index}
+			<circle
+				cx={vertex.x}
+				cy={vertex.y}
+				r="6"
+				fill="white"
+				stroke="rgb(120, 113, 108)"
+				stroke-width="2"
+			/>
+		{/each}
 	{/if}
 
 	</g><!-- End rotation wrapper -->
