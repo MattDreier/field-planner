@@ -347,6 +347,108 @@ function getCompassDirection(azimuth: number): string {
 }
 
 // ============================================================================
+// Shared Sun-Facing Detection
+// ============================================================================
+
+/**
+ * Determine if a line segment's outward face is toward the sun.
+ * Used by rectangles, circles, and fences for consistent shadow behavior.
+ *
+ * The algorithm:
+ * 1. Calculate the segment's outward normal using the interior point
+ * 2. Convert sun azimuth to a direction vector
+ * 3. If dot product of normal and sun direction > 0, segment faces the sun
+ *
+ * @param start - Segment start point
+ * @param end - Segment end point
+ * @param sunAzimuth - Sun compass direction (0=N, 90=E, 180=S, 270=W)
+ * @param interiorPoint - Point on the "inside" to determine outward direction
+ * @returns true if the segment's outward face is illuminated by the sun
+ */
+export function isSegmentSunFacing(
+	start: { x: number; y: number },
+	end: { x: number; y: number },
+	sunAzimuth: number,
+	interiorPoint: { x: number; y: number }
+): boolean {
+	// Calculate segment direction vector
+	const dx = end.x - start.x;
+	const dy = end.y - start.y;
+
+	// Handle degenerate segment (zero length)
+	const segmentLenSq = dx * dx + dy * dy;
+	if (segmentLenSq === 0) return false;
+
+	// Segment midpoint
+	const midX = (start.x + end.x) / 2;
+	const midY = (start.y + end.y) / 2;
+
+	// Vector from interior to segment midpoint (points outward)
+	const toMidX = midX - interiorPoint.x;
+	const toMidY = midY - interiorPoint.y;
+
+	// Two perpendicular options (90° rotations of segment direction):
+	// - CCW rotation: (-dy, dx)
+	// - CW rotation: (dy, -dx)
+	// Choose the one that aligns with the outward direction (interior → midpoint)
+	const dotCCW = -dy * toMidX + dx * toMidY;
+
+	let normalX: number, normalY: number;
+	if (dotCCW >= 0) {
+		// CCW perpendicular points outward
+		normalX = -dy;
+		normalY = dx;
+	} else {
+		// CW perpendicular points outward
+		normalX = dy;
+		normalY = -dx;
+	}
+
+	// Normalize for cleaner dot product (optional but makes threshold consistent)
+	const normalLen = Math.sqrt(normalX * normalX + normalY * normalY);
+	normalX /= normalLen;
+	normalY /= normalLen;
+
+	// Calculate sun direction vector
+	// Azimuth: 0°=North, 90°=East, 180°=South, 270°=West
+	// In SVG coords: +X is East, +Y is South (down)
+	const azimuthRad = (sunAzimuth * Math.PI) / 180;
+	const sunX = Math.sin(azimuthRad); // East component
+	const sunY = -Math.cos(azimuthRad); // North is -Y in SVG
+
+	// Segment is sun-facing if outward normal has positive projection toward sun
+	const dotWithSun = normalX * sunX + normalY * sunY;
+
+	return dotWithSun > 0;
+}
+
+/**
+ * Create a synthetic interior point for fence segments.
+ * Uses the "left side" convention - the interior is on the left
+ * when traveling from start to end.
+ */
+function getFenceInteriorPoint(
+	start: { x: number; y: number },
+	end: { x: number; y: number }
+): { x: number; y: number } {
+	// Segment midpoint
+	const midX = (start.x + end.x) / 2;
+	const midY = (start.y + end.y) / 2;
+
+	// Segment direction
+	const dx = end.x - start.x;
+	const dy = end.y - start.y;
+
+	// "Left" perpendicular in SVG coords (where +Y is down)
+	// Rotating (dx, dy) 90° CCW gives (-dy, dx)
+	// Offset by a small amount to create interior point
+	return {
+		x: midX - dy * 0.1, // Small offset to left side
+		y: midY + dx * 0.1
+	};
+}
+
+// ============================================================================
 // Fence Shadow Calculations
 // ============================================================================
 
@@ -416,6 +518,12 @@ export function calculateFenceShadows(
 			const start = fence.vertices[i];
 			const end = fence.vertices[i + 1];
 
+			// Check if segment is sun-facing using left-side convention
+			const interiorPoint = getFenceInteriorPoint(start, end);
+			if (!isSegmentSunFacing(start, end, sunPosition.azimuth, interiorPoint)) {
+				continue; // Skip segments facing away from sun
+			}
+
 			// Create quadrilateral: base segment + projected shadow endpoints
 			const quadrilateral = {
 				p1: { x: start.x, y: start.y }, // base start
@@ -449,11 +557,13 @@ export interface BedForShadow {
 	heightInches: number; // depth of bed (N-S dimension)
 	raisedBedHeightFeet: number; // wall height
 	rotation?: number; // degrees clockwise from North
+	shape?: 'rectangle' | 'circle'; // defaults to rectangle
 }
 
 /**
  * Calculate shadows for raised bed walls.
  * Only the sun-facing edge casts a visible shadow into the garden.
+ * Circular beds use polygonal approximation for smooth curved shadows.
  *
  * @param beds - Array of beds with dimensions and raised height
  * @param sunPosition - Current sun altitude and azimuth
@@ -488,6 +598,21 @@ export function calculateBedShadows(
 		const offsetX = Math.sin(angleRad) * shadowLength;
 		const offsetY = -Math.cos(angleRad) * shadowLength;
 
+		// Handle circular beds with polygonal approximation
+		if (bed.shape === 'circle') {
+			const circleShadows = calculateCircleBedShadows(
+				bed,
+				sunPosition,
+				shadowLength,
+				shadowAngle,
+				offsetX,
+				offsetY
+			);
+			shadows.push(...circleShadows);
+			continue;
+		}
+
+		// Rectangular bed logic
 		// Get the four corners of the bed (unrotated)
 		const corners = [
 			{ x: bed.x, y: bed.y }, // top-left (NW)
@@ -496,10 +621,12 @@ export function calculateBedShadows(
 			{ x: bed.x, y: bed.y + bed.heightInches } // bottom-left (SW)
 		];
 
+		// Bed center (used as interior point for sun-facing detection)
+		const centerX = bed.x + bed.widthInches / 2;
+		const centerY = bed.y + bed.heightInches / 2;
+
 		// Apply rotation if present (rotate around bed center)
 		if (bed.rotation && bed.rotation !== 0) {
-			const centerX = bed.x + bed.widthInches / 2;
-			const centerY = bed.y + bed.heightInches / 2;
 			const rotRad = (bed.rotation * Math.PI) / 180;
 			const cosR = Math.cos(rotRad);
 			const sinR = Math.sin(rotRad);
@@ -514,45 +641,24 @@ export function calculateBedShadows(
 			}
 		}
 
-		// Determine which edges are sun-facing based on sun azimuth
-		// Sun azimuth: 0° = North, 90° = East, 180° = South, 270° = West
-		// Account for bed rotation
-		const effectiveAzimuth = ((sunPosition.azimuth - (bed.rotation ?? 0)) % 360 + 360) % 360;
-
-		// Edges: 0=top (N), 1=right (E), 2=bottom (S), 3=left (W)
-		// An edge is sun-facing if the sun is on its outer side
+		// Define all four edges
 		const edges = [
-			{ start: corners[0], end: corners[1], facing: 'north' }, // top edge
-			{ start: corners[1], end: corners[2], facing: 'east' }, // right edge
-			{ start: corners[2], end: corners[3], facing: 'south' }, // bottom edge
-			{ start: corners[3], end: corners[0], facing: 'west' } // left edge
+			{ start: corners[0], end: corners[1] }, // top edge
+			{ start: corners[1], end: corners[2] }, // right edge
+			{ start: corners[2], end: corners[3] }, // bottom edge
+			{ start: corners[3], end: corners[0] } // left edge
 		];
 
-		// Select edges that face toward the sun (will cast shadows away from sun)
-		// Using 180° ranges so two adjacent edges cast shadows simultaneously
-		// (except at exact cardinal directions where only one edge is lit)
-		const sunFacingEdges: typeof edges = [];
+		// Interior point for sun-facing detection (bed center)
+		const interiorPoint = { x: centerX, y: centerY };
 
-		// North-facing edge casts shadow when sun has southern component (90-270°)
-		if (effectiveAzimuth > 90 && effectiveAzimuth < 270) {
-			sunFacingEdges.push(edges[0]); // top (north) edge
-		}
-		// East-facing edge casts shadow when sun has western component (180-360°)
-		if (effectiveAzimuth > 180) {
-			sunFacingEdges.push(edges[1]); // right (east) edge
-		}
-		// South-facing edge casts shadow when sun has northern component (<90 or >270)
-		if (effectiveAzimuth < 90 || effectiveAzimuth > 270) {
-			sunFacingEdges.push(edges[2]); // bottom (south) edge
-		}
-		// West-facing edge casts shadow when sun has eastern component (0-180°)
-		if (effectiveAzimuth < 180) {
-			sunFacingEdges.push(edges[3]); // left (west) edge
-		}
-
-		// Create shadow quadrilaterals for sun-facing edges
-		for (let i = 0; i < sunFacingEdges.length; i++) {
-			const edge = sunFacingEdges[i];
+		// Create shadow quadrilaterals for sun-facing edges only
+		let segmentIndex = 0;
+		for (const edge of edges) {
+			// Use unified sun-facing detection
+			if (!isSegmentSunFacing(edge.start, edge.end, sunPosition.azimuth, interiorPoint)) {
+				continue; // Skip edges facing away from sun
+			}
 
 			const quadrilateral = {
 				p1: { x: edge.start.x, y: edge.start.y },
@@ -563,12 +669,77 @@ export function calculateBedShadows(
 
 			shadows.push({
 				fenceId: bed.id,
-				segmentIndex: i,
+				segmentIndex: segmentIndex++,
 				quadrilateral,
 				shadowLength,
 				shadowAngle
 			});
 		}
+	}
+
+	return shadows;
+}
+
+// Number of segments to approximate a circle (higher = smoother curves)
+const CIRCLE_SEGMENTS = 24;
+
+/**
+ * Calculate shadows for a circular raised bed using polygonal approximation.
+ * The circle is divided into segments, and each sun-facing segment casts a quadrilateral shadow.
+ * Uses the unified isSegmentSunFacing() helper with circle center as interior point.
+ */
+function calculateCircleBedShadows(
+	bed: BedForShadow,
+	sunPosition: SunPosition,
+	shadowLength: number,
+	shadowAngle: number,
+	offsetX: number,
+	offsetY: number
+): FenceShadowData[] {
+	const shadows: FenceShadowData[] = [];
+
+	// Circle center and radius (widthInches is diameter)
+	const radius = bed.widthInches / 2;
+	const centerX = bed.x + radius;
+	const centerY = bed.y + radius;
+
+	// Interior point for sun-facing detection (circle center)
+	const interiorPoint = { x: centerX, y: centerY };
+
+	// Generate circle vertices (counter-clockwise from angle 0)
+	const vertices: Array<{ x: number; y: number }> = [];
+	for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+		const angle = (i / CIRCLE_SEGMENTS) * 2 * Math.PI;
+		vertices.push({
+			x: centerX + Math.cos(angle) * radius,
+			y: centerY - Math.sin(angle) * radius // Negative because SVG Y increases downward
+		});
+	}
+
+	// For each segment, check if it's sun-facing using unified helper
+	for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+		const v1 = vertices[i];
+		const v2 = vertices[(i + 1) % CIRCLE_SEGMENTS];
+
+		// Use unified sun-facing detection
+		if (!isSegmentSunFacing(v1, v2, sunPosition.azimuth, interiorPoint)) {
+			continue; // Skip segments facing away from sun
+		}
+
+		const quadrilateral = {
+			p1: { x: v1.x, y: v1.y },
+			p2: { x: v2.x, y: v2.y },
+			p3: { x: v2.x + offsetX, y: v2.y + offsetY },
+			p4: { x: v1.x + offsetX, y: v1.y + offsetY }
+		};
+
+		shadows.push({
+			fenceId: bed.id,
+			segmentIndex: i,
+			quadrilateral,
+			shadowLength,
+			shadowAngle
+		});
 	}
 
 	return shadows;
@@ -581,39 +752,64 @@ export function bedsToStructures(beds: BedForShadow[]): StructureForShading[] {
 	return beds
 		.filter(bed => bed.raisedBedHeightFeet > 0)
 		.map(bed => {
-			// Get the four corners of the bed
-			const corners = [
-				{ x: bed.x, y: bed.y },
-				{ x: bed.x + bed.widthInches, y: bed.y },
-				{ x: bed.x + bed.widthInches, y: bed.y + bed.heightInches },
-				{ x: bed.x, y: bed.y + bed.heightInches }
-			];
+			let segments: Array<{ start: { x: number; y: number }; end: { x: number; y: number } }>;
 
-			// Apply rotation if present
-			if (bed.rotation && bed.rotation !== 0) {
-				const centerX = bed.x + bed.widthInches / 2;
-				const centerY = bed.y + bed.heightInches / 2;
-				const rotRad = (bed.rotation * Math.PI) / 180;
-				const cosR = Math.cos(rotRad);
-				const sinR = Math.sin(rotRad);
+			if (bed.shape === 'circle') {
+				// Generate segments around the circle perimeter
+				const radius = bed.widthInches / 2;
+				const centerX = bed.x + radius;
+				const centerY = bed.y + radius;
 
-				for (let i = 0; i < corners.length; i++) {
-					const dx = corners[i].x - centerX;
-					const dy = corners[i].y - centerY;
-					corners[i] = {
-						x: centerX + dx * cosR - dy * sinR,
-						y: centerY + dx * sinR + dy * cosR
-					};
+				segments = [];
+				for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+					const angle1 = (i / CIRCLE_SEGMENTS) * 2 * Math.PI;
+					const angle2 = ((i + 1) / CIRCLE_SEGMENTS) * 2 * Math.PI;
+					segments.push({
+						start: {
+							x: centerX + Math.cos(angle1) * radius,
+							y: centerY - Math.sin(angle1) * radius
+						},
+						end: {
+							x: centerX + Math.cos(angle2) * radius,
+							y: centerY - Math.sin(angle2) * radius
+						}
+					});
 				}
-			}
+			} else {
+				// Rectangular bed: get the four corners
+				const corners = [
+					{ x: bed.x, y: bed.y },
+					{ x: bed.x + bed.widthInches, y: bed.y },
+					{ x: bed.x + bed.widthInches, y: bed.y + bed.heightInches },
+					{ x: bed.x, y: bed.y + bed.heightInches }
+				];
 
-			// Create segments for all four edges
-			const segments = [
-				{ start: corners[0], end: corners[1] },
-				{ start: corners[1], end: corners[2] },
-				{ start: corners[2], end: corners[3] },
-				{ start: corners[3], end: corners[0] }
-			];
+				// Apply rotation if present
+				if (bed.rotation && bed.rotation !== 0) {
+					const centerX = bed.x + bed.widthInches / 2;
+					const centerY = bed.y + bed.heightInches / 2;
+					const rotRad = (bed.rotation * Math.PI) / 180;
+					const cosR = Math.cos(rotRad);
+					const sinR = Math.sin(rotRad);
+
+					for (let i = 0; i < corners.length; i++) {
+						const dx = corners[i].x - centerX;
+						const dy = corners[i].y - centerY;
+						corners[i] = {
+							x: centerX + dx * cosR - dy * sinR,
+							y: centerY + dx * sinR + dy * cosR
+						};
+					}
+				}
+
+				// Create segments for all four edges
+				segments = [
+					{ start: corners[0], end: corners[1] },
+					{ start: corners[1], end: corners[2] },
+					{ start: corners[2], end: corners[3] },
+					{ start: corners[3], end: corners[0] }
+				];
+			}
 
 			return {
 				type: 'bed' as const,
