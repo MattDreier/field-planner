@@ -125,6 +125,35 @@ export interface StructureForShading {
 }
 
 /**
+ * Calculate perpendicular distance from a point to a line segment.
+ * Used for determining how far a plant is from a shadow-casting edge.
+ */
+function pointToSegmentDistance(
+	px: number,
+	py: number,
+	x1: number,
+	y1: number,
+	x2: number,
+	y2: number
+): number {
+	const dx = x2 - x1;
+	const dy = y2 - y1;
+	const lengthSq = dx * dx + dy * dy;
+
+	if (lengthSq === 0) {
+		// Segment is a point
+		return Math.sqrt((px - x1) ** 2 + (py - y1) ** 2);
+	}
+
+	// Project point onto line, clamped to segment
+	const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lengthSq));
+	const projX = x1 + t * dx;
+	const projY = y1 + t * dy;
+
+	return Math.sqrt((px - projX) ** 2 + (py - projY) ** 2);
+}
+
+/**
  * Test if a point is inside a quadrilateral using the cross product method.
  * Points are expected in order (either CW or CCW).
  */
@@ -222,10 +251,17 @@ export function detectShadedPlants(
 			// cos(20°) ≈ 0.94
 			const coneThreshold = 0.94;
 
-			// Target is shaded if it's within the shadow cone
+			// Target is shaded if it's within the shadow cone AND below the shadow plane
 			if (dotProduct > coneThreshold) {
-				shadedSet.add(target.id);
-				break; // One shadow is enough to mark as shaded
+				// Calculate shadow plane height at target's distance
+				// shadowPlaneHeight = casterHeight × (1 - distance/shadowLength)
+				const shadowPlaneHeight = caster.heightMax * (1 - distToTarget / casterShadowLength);
+
+				// Only shaded if target plant is shorter than shadow plane
+				if (target.heightMax < shadowPlaneHeight) {
+					shadedSet.add(target.id);
+					break; // One shadow is enough to mark as shaded
+				}
 			}
 		}
 	}
@@ -252,8 +288,25 @@ export function detectShadedPlants(
 					};
 
 					if (isPointInQuadrilateral(target.x, target.y, quadrilateral)) {
-						shadedSet.add(target.id);
-						break;
+						// Calculate distance from plant to structure segment
+						const distToSegment = pointToSegmentDistance(
+							target.x,
+							target.y,
+							segment.start.x,
+							segment.start.y,
+							segment.end.x,
+							segment.end.y
+						);
+
+						// Calculate shadow plane height at this distance
+						// shadowPlaneHeight = structureHeight × (1 - distance/shadowLength)
+						const shadowPlaneHeight = structure.heightInches * (1 - distToSegment / shadowLength);
+
+						// Only shaded if plant is shorter than shadow plane at this location
+						if (target.heightMax < shadowPlaneHeight) {
+							shadedSet.add(target.id);
+							break;
+						}
 					}
 				}
 
