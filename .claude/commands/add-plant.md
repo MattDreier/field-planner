@@ -51,9 +51,9 @@ Include ALL of the following in each agent's prompt:
 1. `{NAME} growing guide spacing height germination days`
 2. `{NAME} planting schedule harvest time companion plants common pests`
 3. Kind-specific:
-   - Flower: `{NAME} cut flower vase life colors blooms per plant`
-   - Vegetable: `{NAME} yield per plant storage cooking uses flavor`
-   - Herb: `{NAME} culinary uses flavor profile harvesting`
+   - Flower: `{NAME} cut flower bloom duration garden days vase life colors blooms per plant`
+   - Vegetable: `{NAME} harvest window duration days yield per plant storage cooking uses flavor`
+   - Herb: `{NAME} harvest window before bolting culinary uses flavor profile`
 
 **Step 2 — Build the entry following these rules:**
 - All heights and spacings in **INCHES** (feet × 12, cm × 0.394)
@@ -70,6 +70,8 @@ Include the kind-specific optional fields:
 |---------|-----------|-------|
 | `cutAndComeAgain`: boolean | `cutAndComeAgain`: boolean | `ediblePart`: string |
 | `cutAndComeAgainNotes`: string | `cutAndComeAgainNotes`: string | `flavorProfile`: string |
+| `harvestWindowDays`: number (required) | `harvestWindowDays`: number (required) | `harvestWindowDays`: number (required) |
+| `harvestWindowDaysMax`: number | `harvestWindowDaysMax`: number | `harvestWindowDaysMax`: number |
 | `vaseLifeDays`: number | `ediblePart`: string | `cookingUses`: string[] |
 | `vaseLifeDaysMax`: number | `daysToMaturity`: number | |
 | `bloomsPerPlant`: string | `daysToMaturityMax`: number | |
@@ -78,7 +80,13 @@ Include the kind-specific optional fields:
 | | `storageLife`: string | |
 | | `cookingUses`: string[] | |
 
-**Important for vegetables:** `cutAndComeAgain` determines how the succession planner calculates intervals. Set `true` for continuous producers (tomatoes, peppers, beans, kale, okra) and `false` for single-harvest crops (corn, carrots, cabbage, potatoes). Include `cutAndComeAgainNotes` explaining the harvest pattern.
+**Important — `harvestWindowDays` (required for ALL kinds):** How many days the planting actively produces after first harvest. This drives the succession planner algorithm.
+- **Flowers:** Bloom duration IN THE GARDEN (NOT vase life). Zinnias bloom 60-90 days; poppies only 14-21 days.
+- **Vegetables:** Production window from first to last harvest. Tomatoes 60-90 days; sweet corn only 3-5 days.
+- **Herbs:** Leaf/flower production before bolting or seasonal decline. Basil 60-90 days; cilantro only 21-35 days.
+- Sources: ASCFG for flowers, university extension (.edu) for vegetables, culinary guides for herbs.
+
+**Important for vegetables:** `cutAndComeAgain` describes the harvest pattern. Set `true` for continuous producers (tomatoes, peppers, beans, kale, okra) and `false` for single-harvest crops (corn, carrots, cabbage, potatoes). Include `cutAndComeAgainNotes` explaining the harvest pattern.
 
 Always include for all kinds: `colors`, `harvestTips`, `commonPests` (3–5 items), `companionPlants` (3–5 items), and `plantingSchedule`.
 

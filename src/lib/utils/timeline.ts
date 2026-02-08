@@ -138,17 +138,8 @@ export function calculateLifecyclePhases(
 			label: 'Growing outdoors'
 		});
 
-		// Harvest window duration
-		// For cut-and-come-again, extend the harvest window significantly
-		let harvestDuration: number;
-		if (plantData.cutAndComeAgain) {
-			harvestDuration = 60; // 2 months of repeated harvests
-		} else {
-			// Use the difference between min and max harvest days, plus vase life as buffer
-			const harvestRange =
-				(plantData.daysToHarvestMax ?? plantData.daysToHarvest) - plantData.daysToHarvest;
-			harvestDuration = Math.max(14, harvestRange + 7);
-		}
+		// Harvest window from plant data — how long this planting actively produces
+		const harvestDuration = plantData.harvestWindowDaysMax ?? plantData.harvestWindowDays;
 
 		phases.push({
 			phase: 'harvest-window',
@@ -173,7 +164,7 @@ export interface SuccessionSuggestion {
 
 /**
  * Suggest succession planting intervals based on plant data and season length.
- * Uses vase life for flowers, days to maturity for vegetables/herbs.
+ * Uses harvestWindowDays as the single source of truth for all plant kinds.
  */
 export function suggestSuccessionInterval(
 	plantData: PlantData,
@@ -188,49 +179,20 @@ export function suggestSuccessionInterval(
 		};
 	}
 
-	const hasVaseLife = plantData.vaseLifeDays != null || plantData.vaseLifeDaysMax != null;
+	const harvestWindow = plantData.harvestWindowDaysMax ?? plantData.harvestWindowDays;
 
-	let baseInterval: number;
-	let reasoning: string;
+	// Continuous: 40% overlap between plantings. Staggered: no overlap.
+	const multiplier = desiredCoverage === 'continuous' ? 0.6 : 1.0;
+	const baseInterval = Math.max(7, Math.min(Math.round(harvestWindow * multiplier), 60));
 
-	if (hasVaseLife) {
-		// Flowers: interval based on vase life for continuous fresh blooms
-		const vaseLife = (plantData.vaseLifeDaysMax ?? plantData.vaseLifeDays)!;
-		if (plantData.cutAndComeAgain) {
-			baseInterval = Math.max(vaseLife * 2, 21);
-			reasoning = `${plantData.name} produces continuously, so ${baseInterval}-day intervals maintain steady supply`;
-		} else {
-			baseInterval = vaseLife;
-			reasoning = `${baseInterval}-day intervals match ${plantData.name}'s ${vaseLife}-day vase life for continuous blooms`;
-		}
-	} else {
-		// Vegetables/herbs: interval based on days to maturity
-		const maturityDays = plantData.daysToMaturity ?? plantData.daysToHarvest;
-		if (plantData.cutAndComeAgain) {
-			// Continuous producers (tomatoes, peppers, beans, kale) — wider spacing
-			// They keep producing once mature, stagger to extend the season window
-			baseInterval = Math.max(21, Math.round(maturityDays / 3));
-			reasoning = `${plantData.name} produces continuously once mature — ${baseInterval}-day intervals extend the harvest window`;
-		} else {
-			// Single-harvest crops (corn, lettuce, carrots, radishes) — tighter staggering
-			// so a new batch matures as the previous one finishes
-			baseInterval = Math.min(21, Math.max(10, Math.round(maturityDays / 4)));
-			reasoning = `${baseInterval}-day intervals stagger ${plantData.name}'s ${maturityDays}-day maturity for continuous harvest`;
-		}
-	}
-
-	// For staggered harvests, double the interval
-	if (desiredCoverage === 'staggered') {
-		baseInterval = baseInterval * 2;
-	}
-
-	// Calculate number of plantings that fit in the season
 	const growingTime = plantData.daysToHarvest;
 	const effectiveSeasonLength = seasonLengthDays - growingTime;
 	const totalPlantings = Math.max(1, Math.floor(effectiveSeasonLength / baseInterval));
 
+	const reasoning = `${plantData.name} produces for ~${harvestWindow} days — ${baseInterval}-day intervals for ${desiredCoverage} harvest`;
+
 	return {
-		intervalDays: Math.round(baseInterval),
+		intervalDays: baseInterval,
 		totalPlantings,
 		reasoning
 	};

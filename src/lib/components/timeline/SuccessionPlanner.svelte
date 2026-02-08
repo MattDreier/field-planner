@@ -315,7 +315,7 @@
 					value={coverageType}
 					onchange={handleCoverageChange}
 				>
-					<option value="continuous">Continuous - Fresh flowers always available</option>
+					<option value="continuous">Continuous - Always something to harvest</option>
 					<option value="staggered">Staggered - Periodic harvests with gaps</option>
 					<option value="single">Single - One-time planting only</option>
 				</select>
