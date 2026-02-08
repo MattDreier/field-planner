@@ -333,8 +333,8 @@
 		selectedPlantIds.size === 1 ? plants.find((p) => selectedPlantIds.has(p._id)) ?? null : null
 	);
 
-	// Determine which flower to show in details panel (placed plant takes priority)
-	const detailsPlantId = $derived(selectedPlant?.flowerId ?? viewingPlantId);
+	// Determine which flower to show in details panel (only from palette clicks)
+	const detailsPlantId = $derived(viewingPlantId);
 
 	// Track when user scrolls to bottom of details panel (for tour)
 	let detailsScrolledToBottom = $state(false);
