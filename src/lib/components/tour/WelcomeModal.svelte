@@ -12,7 +12,7 @@
 			<Dialog.Header>
 				<Dialog.Title class="text-2xl">Welcome to Field Planner!</Dialog.Title>
 				<Dialog.Description class="text-base">
-					Plan your cut flower garden with visual beds, plant spacing, and timeline tracking.
+					Plan your garden with visual beds, plant spacing, and timeline tracking.
 				</Dialog.Description>
 			</Dialog.Header>
 
@@ -34,7 +34,7 @@
 						</div>
 						<div>
 							<h4 class="font-medium text-sm">Place Plants</h4>
-							<p class="text-xs text-muted-foreground">Drag flowers with smart spacing circles</p>
+							<p class="text-xs text-muted-foreground">Drag plants with smart spacing circles</p>
 						</div>
 					</div>
 

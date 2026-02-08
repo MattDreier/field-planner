@@ -16,7 +16,7 @@
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
 	import { timelineState, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
-	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
+	import { getPlantById, PLANT_DATABASE } from '$lib/data/plants';
 	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
@@ -81,7 +81,7 @@
 	let currentTool = $state<Tool>('select');
 	let selectedBedIds = $state<Set<Id<'beds'>>>(new Set());
 	let selectedPlantIds = $state<Set<Id<'placedPlants'>>>(new Set());
-	let viewingFlowerId = $state<string | null>(null); // For viewing flower details from palette
+	let viewingPlantId = $state<string | null>(null); // For viewing flower details from palette
 	let dragSource = $state<DragSource>(null);
 	let showSuccessionPlanner = $state(false);
 
@@ -277,7 +277,7 @@
 			selectedBedIds = new Set();
 			selectedFenceIds = new Set();
 		}
-		viewingFlowerId = null; // Clear palette selection when selecting a placed plant
+		viewingPlantId = null; // Clear palette selection when selecting a placed plant
 	}
 
 	function selectFence(id: Id<'fences'> | null, shiftKey = false) {
@@ -308,12 +308,12 @@
 	}
 
 	// Handle clicking a flower in the palette
-	function handleFlowerClick(flowerId: string) {
+	function handlePlantClick(flowerId: string) {
 		// Toggle: clicking same flower again closes panel
-		if (flowerId === viewingFlowerId) {
-			viewingFlowerId = null;
+		if (flowerId === viewingPlantId) {
+			viewingPlantId = null;
 		} else {
-			viewingFlowerId = flowerId;
+			viewingPlantId = flowerId;
 		}
 		selectedPlantIds = new Set(); // Clear placed plant selection
 		selectedBedIds = new Set();
@@ -334,14 +334,14 @@
 	);
 
 	// Determine which flower to show in details panel (placed plant takes priority)
-	const detailsFlowerId = $derived(selectedPlant?.flowerId ?? viewingFlowerId);
+	const detailsPlantId = $derived(selectedPlant?.flowerId ?? viewingPlantId);
 
 	// Track when user scrolls to bottom of details panel (for tour)
 	let detailsScrolledToBottom = $state(false);
 
 	// Reset scroll tracking when details panel closes or flower changes
 	$effect(() => {
-		if (!detailsFlowerId) {
+		if (!detailsPlantId) {
 			detailsScrolledToBottom = false;
 		}
 	});
@@ -353,7 +353,7 @@
 		const firstPlant = plants[0];
 		if (!firstPlant.plantingDates) return { growingStart: undefined, harvestStart: undefined };
 
-		const flower = FLOWER_DATABASE.find(f => f.id === firstPlant.flowerId);
+		const flower = PLANT_DATABASE.find(f => f.id === firstPlant.flowerId);
 		if (!flower) return { growingStart: undefined, harvestStart: undefined };
 
 		const phases = calculateLifecyclePhases(firstPlant.plantingDates, flower);
@@ -372,12 +372,12 @@
 	});
 
 	// Tour state tracking - gather all state needed for completion checking
-	// Must be defined after detailsFlowerId since it depends on it
+	// Must be defined after detailsPlantId since it depends on it
 	const appStateForTour = $derived<TourAppState>({
 		currentTool,
 		bedsLength: beds.length,
 		plantsLength: plants.length,
-		detailsFlowerId,
+		detailsPlantId,
 		detailsScrolledToBottom,
 		timelinePanelOpen: timelineState.isPanelOpen,
 		currentViewDate: timelineState.currentViewDate,
@@ -484,7 +484,7 @@
 
 	// Determine if a flower should be started indoors based on its data
 	function isIndoorStartFlower(flowerId: string): boolean {
-		const flower = getFlowerById(flowerId);
+		const flower = getPlantById(flowerId);
 		if (!flower) return false;
 
 		// Check propagation method - transplant implies indoor start
@@ -526,7 +526,7 @@
 		history.push(beds, plants);
 
 		// Get flower data for scheduling
-		const flower = FLOWER_DATABASE.find(f => f.id === flowerId);
+		const flower = PLANT_DATABASE.find(f => f.id === flowerId);
 
 		let plantingDates: PlantingDates;
 
@@ -1088,7 +1088,7 @@
 
 			{#if currentTool === 'select'}
 				<div class="flex-1 overflow-hidden">
-					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
+					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onPlantClick={handlePlantClick} />
 				</div>
 			{/if}
 
@@ -1154,13 +1154,13 @@
 		</main>
 
 		<!-- Plant details slide-out panel -->
-		{#if detailsFlowerId}
+		{#if detailsPlantId}
 			<PlantDetails
-				flowerId={detailsFlowerId}
+				plantId={detailsPlantId}
 				selectedPlant={selectedPlant}
 				onClose={() => {
 					selectedPlantIds = new Set();
-					viewingFlowerId = null;
+					viewingPlantId = null;
 				}}
 				onScrolledToBottom={() => {
 					detailsScrolledToBottom = true;

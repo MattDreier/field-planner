@@ -1,7 +1,7 @@
 <script lang="ts">
 	import SpacingCircle from './SpacingCircle.svelte';
 	import type { PlacedPlant, PlannedPlant } from '$lib/types';
-	import type { FlowerData } from '$lib/data/flowers';
+	import type { PlantData } from '$lib/data/plants';
 	import type { LifecyclePhase } from '$lib/utils/timeline';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -13,7 +13,7 @@
 	}
 
 	// Union type for both placed and planned plants
-	type PlantData = PlacedPlant | (PlannedPlant & { flowerData: FlowerData });
+	type PlantData = PlacedPlant | (PlannedPlant & { flowerData: PlantData });
 
 	interface Props {
 		plant: PlantData;

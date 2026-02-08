@@ -1,37 +1,37 @@
 <script lang="ts">
-	import { FLOWER_DATABASE, type FlowerData } from '$lib/data/flowers';
+	import { PLANT_DATABASE, type PlantData } from '$lib/data/plants';
 	import PlantCard from './PlantCard.svelte';
 	import type { DragSource } from '$lib/types';
 
 	interface Props {
 		onDragStart: (source: DragSource) => void;
 		onDragEnd: () => void;
-		onFlowerClick?: (flowerId: string) => void;
+		onPlantClick?: (plantId: string) => void;
 	}
 
-	let { onDragStart, onDragEnd, onFlowerClick }: Props = $props();
+	let { onDragStart, onDragEnd, onPlantClick }: Props = $props();
 
 	let searchQuery = $state('');
 
-	const filteredFlowers = $derived(
-		FLOWER_DATABASE.filter(
+	const filteredPlants = $derived(
+		PLANT_DATABASE.filter(
 			(f) =>
 				f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 				f.scientificName.toLowerCase().includes(searchQuery.toLowerCase())
 		)
 	);
 
-	function handleDragStart(flower: FlowerData, e: DragEvent) {
+	function handleDragStart(plant: PlantData, e: DragEvent) {
 		// Set drag data
-		e.dataTransfer?.setData('text/plain', flower.id);
+		e.dataTransfer?.setData('text/plain', plant.id);
 
 		// Notify parent
 		onDragStart({
 			type: 'flower',
-			flowerId: flower.id,
-			flowerName: flower.name,
-			spacingMin: flower.spacingMin,
-			heightMax: flower.heightMax
+			flowerId: plant.id,
+			flowerName: plant.name,
+			spacingMin: plant.spacingMin,
+			heightMax: plant.heightMax
 		});
 	}
 
@@ -47,31 +47,31 @@
 		<h3 class="font-semibold text-lg mb-2">Plants</h3>
 		<input
 			type="search"
-			placeholder="Search flowers..."
+			placeholder="Search plants..."
 			bind:value={searchQuery}
 			class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
 		/>
 	</div>
 
 	<div class="flex-1 overflow-y-auto p-4 space-y-2">
-		{#each filteredFlowers as flower (flower.id)}
+		{#each filteredPlants as plant (plant.id)}
 			<PlantCard
-				{flower}
-				onDragStart={(e) => handleDragStart(flower, e)}
-				onClick={() => onFlowerClick?.(flower.id)}
+				{plant}
+				onDragStart={(e) => handleDragStart(plant, e)}
+				onClick={() => onPlantClick?.(plant.id)}
 			/>
 		{/each}
 
-		{#if filteredFlowers.length === 0}
+		{#if filteredPlants.length === 0}
 			<p class="text-center text-muted-foreground text-sm py-8">
-				No flowers found matching "{searchQuery}"
+				No plants found matching "{searchQuery}"
 			</p>
 		{/if}
 	</div>
 
 	<div class="p-4 border-t border-border bg-muted/50">
 		<p class="text-xs text-muted-foreground">
-			Drag flowers onto beds to place them. Spacing circles show minimum required space.
+			Drag plants onto beds to place them. Spacing circles show minimum required space.
 		</p>
 	</div>
 </div>

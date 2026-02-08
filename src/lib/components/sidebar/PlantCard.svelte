@@ -1,14 +1,14 @@
 <script lang="ts">
-	import type { FlowerData } from '$lib/data/flowers';
+	import type { PlantData } from '$lib/data/plants';
 	import { formatHeight } from '$lib/utils/color';
 
 	interface Props {
-		flower: FlowerData;
+		plant: PlantData;
 		onDragStart: (e: DragEvent) => void;
 		onClick?: () => void;
 	}
 
-	let { flower, onDragStart, onClick }: Props = $props();
+	let { plant, onDragStart, onClick }: Props = $props();
 </script>
 
 <div
@@ -19,20 +19,20 @@
 	onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 	role="button"
 	tabindex="0"
-	data-tour="flower-{flower.id}"
+	data-tour="flower-{plant.id}"
 >
 	<div class="flex items-start justify-between gap-2">
 		<div class="min-w-0">
-			<h4 class="font-medium text-sm leading-tight">{flower.name}</h4>
-			<p class="text-xs text-muted-foreground italic">{flower.scientificName}</p>
+			<h4 class="font-medium text-sm leading-tight">{plant.name}</h4>
+			<p class="text-xs text-muted-foreground italic">{plant.scientificName}</p>
 		</div>
 	</div>
 	<div class="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
 		<span>
-			<span class="text-foreground/70">Spacing</span> {flower.spacingMin}–{flower.spacingMax}"
+			<span class="text-foreground/70">Spacing</span> {plant.spacingMin}–{plant.spacingMax}"
 		</span>
 		<span>
-			<span class="text-foreground/70">Height</span> {formatHeight(flower.heightMin)}–{formatHeight(flower.heightMax)}
+			<span class="text-foreground/70">Height</span> {formatHeight(plant.heightMin)}–{formatHeight(plant.heightMax)}
 		</span>
 	</div>
 </div>

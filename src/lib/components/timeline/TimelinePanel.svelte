@@ -10,8 +10,7 @@
 	} from '$lib/stores/timeline.svelte';
 	import { ZONE_OPTIONS, formatZone } from '$lib/data/hardinessZones';
 	import type { Bed, PlacedPlant, GardenSettings, PlantingDates } from '$lib/types';
-	import type { FlowerData } from '$lib/data/flowers';
-	import { FLOWER_DATABASE } from '$lib/data/flowers';
+	import { PLANT_DATABASE, type PlantData } from '$lib/data/plants';
 	import { calculateLifecyclePhases, type TimelineEntry } from '$lib/utils/timeline';
 
 	interface Props {
@@ -143,11 +142,11 @@
 		initializeGardenSettings();
 	});
 
-	// Build flower lookup map
-	const flowerMap = $derived.by(() => {
-		const map = new Map<string, FlowerData>();
-		for (const flower of FLOWER_DATABASE) {
-			map.set(flower.id, flower);
+	// Build plant lookup map
+	const plantMap = $derived.by(() => {
+		const map = new Map<string, PlantData>();
+		for (const plant of PLANT_DATABASE) {
+			map.set(plant.id, plant);
 		}
 		return map;
 	});
@@ -169,7 +168,7 @@
 		for (const plant of plants) {
 			if (!plant.plantingDates) continue;
 
-			const flower = flowerMap.get(plant.flowerId);
+			const flower = plantMap.get(plant.flowerId);
 			if (!flower) continue;
 
 			const phases = calculateLifecyclePhases(plant.plantingDates, flower);
@@ -191,7 +190,7 @@
 
 		// Add planned plants
 		for (const plant of timelineState.plannedPlants) {
-			const flower = flowerMap.get(plant.flowerId);
+			const flower = plantMap.get(plant.flowerId);
 			if (!flower) continue;
 
 			const phases = calculateLifecyclePhases(plant.plantingDates, flower);

@@ -27,7 +27,7 @@
 	import { calculateAllShadows, calculateFenceShadows, calculateBedShadows, detectShadedPlants, fencesToStructures, bedsToStructures, type BedForShadow } from '$lib/utils/shadow';
 	import { calculateLifecyclePhases, getPlantVisibilityAtDate, getPlantHeightAtDate, type LifecyclePhase, type PlantVisibility } from '$lib/utils/timeline';
 	import { timelineState, updatePlannedPlantPosition } from '$lib/stores/timeline.svelte';
-	import { getFlowerById, type FlowerData } from '$lib/data/flowers';
+	import { getPlantById, type PlantData } from '$lib/data/plants';
 	import type { Id } from '../../../convex/_generated/dataModel';
 	import type { PlannedPlant, PlantingDates } from '$lib/types';
 
@@ -328,7 +328,7 @@
 			let visibility: PlantVisibility = { isVisible: true, currentPhase: null, phaseLabel: null, phaseColor: null, phaseProgress: 0 };
 			let currentHeight = plant.heightMax; // Default to max height
 
-			const flowerData = getFlowerById(plant.flowerId);
+			const flowerData = getPlantById(plant.flowerId);
 			if (plant.plantingDates && flowerData) {
 				const phases = calculateLifecyclePhases(plant.plantingDates, flowerData);
 				visibility = getPlantVisibilityAtDate(phases, currentViewDate);
@@ -374,7 +374,7 @@
 				if (!bed) return null;
 
 				// Get flower data for spacing and visibility calculations
-				const flowerData = getFlowerById(planned.flowerId);
+				const flowerData = getPlantById(planned.flowerId);
 				if (!flowerData) return null;
 
 				// Calculate visibility based on current timeline date
@@ -425,7 +425,7 @@
 			})
 			.filter(Boolean) as Array<
 				PlannedPlant & {
-					flowerData: FlowerData;
+					flowerData: PlantData;
 					bed: BedType;
 					localX: number;
 					localY: number;

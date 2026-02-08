@@ -27,7 +27,7 @@ export interface TourAppState {
 	currentTool: string;
 	bedsLength: number;
 	plantsLength: number;
-	detailsFlowerId: string | null;
+	detailsPlantId: string | null;
 	detailsScrolledToBottom: boolean;
 	timelinePanelOpen: boolean;
 	currentViewDate: string;
@@ -73,15 +73,15 @@ export const TOUR_STEPS: TourStep[] = [
 	},
 	{
 		id: 'flower-details',
-		title: 'Explore a Flower',
-		description: 'Click on a flower card to see detailed growing information.',
+		title: 'Explore a Plant',
+		description: 'Click on a plant card to see detailed growing information.',
 		targetSelector: '[data-tour="flower-zinnias"]',
 		placement: 'bottom',
-		completionCondition: (state) => state.detailsFlowerId === 'zinnias'
+		completionCondition: (state) => state.detailsPlantId === 'zinnias'
 	},
 	{
 		id: 'explore-details',
-		title: 'Learn About This Flower',
+		title: 'Learn About This Plant',
 		description:
 			'Scroll through the details panel to learn about spacing, growing conditions, harvest tips, and more!',
 		targetSelector: '[data-tour="details-panel"]',
@@ -91,10 +91,10 @@ export const TOUR_STEPS: TourStep[] = [
 	{
 		id: 'close-details',
 		title: 'Close the Details Panel',
-		description: "Click the X to close the flower details panel when you're done exploring.",
+		description: "Click the X to close the plant details panel when you're done exploring.",
 		targetSelector: '[data-tour="close-details"]',
 		placement: 'bottom',
-		completionCondition: (state) => state.detailsFlowerId === null
+		completionCondition: (state) => state.detailsPlantId === null
 	},
 	{
 		id: 'place-plant',
