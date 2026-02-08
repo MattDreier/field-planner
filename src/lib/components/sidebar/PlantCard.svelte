@@ -23,7 +23,12 @@
 >
 	<div class="flex items-start justify-between gap-2">
 		<div class="min-w-0">
-			<h4 class="font-medium text-sm leading-tight">{plant.name}</h4>
+			<h4 class="font-medium text-sm leading-tight">
+				{plant.name}
+				{#if plant.isUserPlant}
+					<span class="ml-1.5 inline-flex px-1.5 py-0.5 text-[10px] font-medium bg-primary/15 text-primary rounded-full align-middle">Custom</span>
+				{/if}
+			</h4>
 			<p class="text-xs text-muted-foreground italic">{plant.scientificName}</p>
 		</div>
 	</div>

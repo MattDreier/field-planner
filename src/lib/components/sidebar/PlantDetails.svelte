@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { getPlantById, type PlantData } from '$lib/data/plants';
-	import { X, Droplets, Sun, Thermometer, Scissors, Calendar, Ruler, Leaf } from 'lucide-svelte';
+	import { userPlantsState, deleteUserPlant, getUserPlants } from '$lib/stores/userPlants.svelte';
+	import type { UserPlantData } from '$lib/types/userPlants';
+	import { X, Droplets, Sun, Thermometer, Scissors, Calendar, Ruler, Leaf, Pencil, Trash2 } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import AddPlantDialog from './AddPlantDialog.svelte';
 	import type { PlacedPlant } from '$lib/types';
 
 	interface Props {
@@ -13,7 +17,20 @@
 
 	let { plantId, selectedPlant = null, onClose, onScrolledToBottom }: Props = $props();
 
-	const plant = $derived(getPlantById(plantId));
+	const plant = $derived(getPlantById(plantId, getUserPlants()));
+	const isUserPlant = $derived(plant?.isUserPlant === true);
+	const userPlantData = $derived(
+		isUserPlant ? (userPlantsState.plants.find(p => p.id === plantId) ?? null) : null
+	);
+
+	let editDialogOpen = $state(false);
+	let deleteDialogOpen = $state(false);
+
+	function handleDelete() {
+		deleteUserPlant(plantId);
+		deleteDialogOpen = false;
+		onClose();
+	}
 
 	// Scroll-to-bottom detection for tour
 	let sentinelElement: HTMLDivElement | null = $state(null);
@@ -59,12 +76,27 @@
 		<!-- Header -->
 		<div class="flex items-start justify-between p-4 border-b border-border">
 			<div>
-				<h2 class="text-lg font-semibold">{plant.name}</h2>
+				<h2 class="text-lg font-semibold">
+					{plant.name}
+					{#if isUserPlant}
+						<span class="ml-1.5 inline-flex px-1.5 py-0.5 text-[10px] font-medium bg-primary/15 text-primary rounded-full align-middle">Custom</span>
+					{/if}
+				</h2>
 				<p class="text-sm text-muted-foreground italic">{plant.scientificName}</p>
 			</div>
-			<Button variant="ghost" size="icon" onclick={onClose} aria-label="Close panel" data-tour="close-details">
-				<X class="w-4 h-4" />
-			</Button>
+			<div class="flex items-center gap-1">
+				{#if isUserPlant}
+					<Button variant="ghost" size="icon" onclick={() => (editDialogOpen = true)} aria-label="Edit plant">
+						<Pencil class="w-4 h-4" />
+					</Button>
+					<Button variant="ghost" size="icon" onclick={() => (deleteDialogOpen = true)} aria-label="Delete plant" class="text-destructive hover:text-destructive">
+						<Trash2 class="w-4 h-4" />
+					</Button>
+				{/if}
+				<Button variant="ghost" size="icon" onclick={onClose} aria-label="Close panel" data-tour="close-details">
+					<X class="w-4 h-4" />
+				</Button>
+			</div>
 		</div>
 
 		<!-- Scrollable content -->
@@ -304,4 +336,29 @@
 			<div bind:this={sentinelElement} class="h-1" aria-hidden="true"></div>
 		</div>
 	</aside>
+
+	<!-- Edit dialog for user plants -->
+	{#if isUserPlant && userPlantData}
+		<AddPlantDialog
+			bind:open={editDialogOpen}
+			onOpenChange={(v) => (editDialogOpen = v)}
+			editingPlant={userPlantData}
+		/>
+	{/if}
+
+	<!-- Delete confirmation -->
+	<AlertDialog.Root bind:open={deleteDialogOpen}>
+		<AlertDialog.Content>
+			<AlertDialog.Header>
+				<AlertDialog.Title>Delete {plant.name}?</AlertDialog.Title>
+				<AlertDialog.Description>
+					This will remove the plant from your library. Any placed instances on the canvas will remain but won't show details.
+				</AlertDialog.Description>
+			</AlertDialog.Header>
+			<AlertDialog.Footer>
+				<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+				<AlertDialog.Action onclick={handleDelete}>Delete</AlertDialog.Action>
+			</AlertDialog.Footer>
+		</AlertDialog.Content>
+	</AlertDialog.Root>
 {/if}

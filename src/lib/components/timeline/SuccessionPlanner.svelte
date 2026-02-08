@@ -2,7 +2,8 @@
 	import { X, Calendar, Repeat, Sprout, Info, ChevronRight } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { PLANT_DATABASE, getPlantById, type PlantData } from '$lib/data/plants';
+	import { getPlantById, type PlantData, getAllPlantsWithUserPlants } from '$lib/data/plants';
+	import { getUserPlants } from '$lib/stores/userPlants.svelte';
 	import type { Bed } from '$lib/types';
 	import {
 		suggestSuccessionInterval,
@@ -39,7 +40,7 @@
 	let customPlantingCount = $state(4);
 
 	// Derived state
-	const selectedFlower = $derived(selectedFlowerId ? getPlantById(selectedFlowerId) : null);
+	const selectedFlower = $derived(selectedFlowerId ? getPlantById(selectedFlowerId, getUserPlants()) : null);
 	const selectedBed = $derived(beds.find((b) => b._id === selectedBedId));
 
 	// Calculate season length from frost dates
@@ -134,7 +135,7 @@
 		useCustomCount = false;
 
 		// Auto-fill first planting date based on flower's schedule
-		const flower = selectedFlowerId ? getPlantById(selectedFlowerId) : null;
+		const flower = selectedFlowerId ? getPlantById(selectedFlowerId, getUserPlants()) : null;
 		if (flower?.plantingSchedule) {
 			const lastFrost = parseDate(timelineState.gardenSettings.lastFrostDate);
 			const firstFrost = parseDate(timelineState.gardenSettings.firstFrostDate);
@@ -242,7 +243,7 @@
 						onchange={handleFlowerChange}
 					>
 						<option value="">Select a plant...</option>
-						{#each PLANT_DATABASE as plant}
+						{#each getAllPlantsWithUserPlants(getUserPlants()) as plant}
 							<option value={plant.id}>{plant.name}</option>
 						{/each}
 					</select>

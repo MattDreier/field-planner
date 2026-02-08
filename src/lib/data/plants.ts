@@ -70,6 +70,10 @@ export interface PlantData {
 
   // Structured planting schedule
   plantingSchedule?: PlantingSchedule;
+
+  // Grouping & user plants
+  speciesGroup?: string;
+  isUserPlant?: boolean;
 }
 
 export const PLANT_DATABASE: PlantData[] = [
@@ -3222,10 +3226,13 @@ export const FLOWER_DATABASE = PLANT_DATABASE;
 // ============================================================================
 
 /**
- * Get a plant by its ID
+ * Get a plant by its ID (searches built-in database, and optionally user plants)
  */
-export function getPlantById(id: string): PlantData | undefined {
-  return PLANT_DATABASE.find(plant => plant.id === id);
+export function getPlantById(id: string, userPlants?: PlantData[]): PlantData | undefined {
+  const builtIn = PLANT_DATABASE.find(plant => plant.id === id);
+  if (builtIn) return builtIn;
+  if (userPlants) return userPlants.find(p => p.id === id);
+  return undefined;
 }
 
 /**
@@ -3233,6 +3240,27 @@ export function getPlantById(id: string): PlantData | undefined {
  */
 export function getAllPlants(): PlantData[] {
   return [...PLANT_DATABASE];
+}
+
+/**
+ * Get all built-in plants merged with user plants
+ */
+export function getAllPlantsWithUserPlants(userPlants: PlantData[]): PlantData[] {
+  return [...PLANT_DATABASE, ...userPlants];
+}
+
+/**
+ * Get all unique species groups from both built-in and user plants
+ */
+export function getAllSpeciesGroups(userPlants: PlantData[] = []): string[] {
+  const groups = new Set<string>();
+  for (const plant of PLANT_DATABASE) {
+    if (plant.speciesGroup) groups.add(plant.speciesGroup);
+  }
+  for (const plant of userPlants) {
+    if (plant.speciesGroup) groups.add(plant.speciesGroup);
+  }
+  return [...groups].sort();
 }
 
 /**

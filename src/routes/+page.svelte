@@ -16,7 +16,8 @@
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
 	import { timelineState, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
-	import { getPlantById, PLANT_DATABASE } from '$lib/data/plants';
+	import { getPlantById } from '$lib/data/plants';
+	import { getUserPlants } from '$lib/stores/userPlants.svelte';
 	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
@@ -353,7 +354,7 @@
 		const firstPlant = plants[0];
 		if (!firstPlant.plantingDates) return { growingStart: undefined, harvestStart: undefined };
 
-		const flower = PLANT_DATABASE.find(f => f.id === firstPlant.flowerId);
+		const flower = getPlantById(firstPlant.flowerId, getUserPlants());
 		if (!flower) return { growingStart: undefined, harvestStart: undefined };
 
 		const phases = calculateLifecyclePhases(firstPlant.plantingDates, flower);
@@ -484,7 +485,7 @@
 
 	// Determine if a flower should be started indoors based on its data
 	function isIndoorStartFlower(flowerId: string): boolean {
-		const flower = getPlantById(flowerId);
+		const flower = getPlantById(flowerId, getUserPlants());
 		if (!flower) return false;
 
 		// Check propagation method - transplant implies indoor start
@@ -526,7 +527,7 @@
 		history.push(beds, plants);
 
 		// Get flower data for scheduling
-		const flower = PLANT_DATABASE.find(f => f.id === flowerId);
+		const flower = getPlantById(flowerId, getUserPlants());
 
 		let plantingDates: PlantingDates;
 
