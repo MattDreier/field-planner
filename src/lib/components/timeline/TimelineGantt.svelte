@@ -31,6 +31,9 @@
 	let draggingEntryId = $state<string | null>(null);
 	let dragStartEntryX = $state(0);
 
+	// Row hover state (shared between label and chart panels)
+	let hoveredRowIdx = $state<number | null>(null);
+
 	// Container width tracking for dynamic sizing
 	let containerWidth = $state(800);
 
@@ -420,6 +423,8 @@
 
 	// Scroll container reference for horizontal scrolling
 	let scrollContainer: HTMLDivElement;
+	let labelScrollContainer: HTMLDivElement;
+	let isSyncingScroll = false;
 
 	// Track container width for dynamic month view sizing
 	$effect(() => {
@@ -435,17 +440,32 @@
 		return () => resizeObserver.disconnect();
 	});
 
-	// Season view: handle infinite scroll by updating viewYear when scrolling far right
-	function handleScroll(e: Event) {
-		if (viewScale !== 'season') return;
-
+	// Sync vertical scroll between chart and label panels
+	function handleChartScroll(e: Event) {
 		const target = e.target as HTMLDivElement;
-		const scrollRight = target.scrollWidth - target.scrollLeft - target.clientWidth;
 
-		// When user scrolls near the right edge, load more years
+		// Sync left labels vertical position
+		if (!isSyncingScroll && labelScrollContainer) {
+			isSyncingScroll = true;
+			labelScrollContainer.scrollTop = target.scrollTop;
+			isSyncingScroll = false;
+		}
+
+		// Season view: infinite scroll by updating viewYear when scrolling far right
+		if (viewScale !== 'season') return;
+		const scrollRight = target.scrollWidth - target.scrollLeft - target.clientWidth;
 		if (scrollRight < 500 && target.scrollLeft > 100) {
 			// Could extend the range here - for now we just have 5 years
 		}
+	}
+
+	function handleLabelScroll() {
+		if (isSyncingScroll) return;
+		isSyncingScroll = true;
+		if (scrollContainer) {
+			scrollContainer.scrollTop = labelScrollContainer.scrollTop;
+		}
+		isSyncingScroll = false;
 	}
 </script>
 
@@ -460,8 +480,13 @@
 			<span class="text-xs font-medium text-muted-foreground">Plant / Bed</span>
 		</div>
 
-		<!-- Labels -->
-		<div class="overflow-y-auto" style="height: calc(100% - 40px)">
+		<!-- Labels (scrollbar hidden, synced with chart vertical scroll) -->
+		<div
+			class="overflow-y-auto hide-scrollbar"
+			style="height: calc(100% - 40px)"
+			bind:this={labelScrollContainer}
+			onscroll={handleLabelScroll}
+		>
 			{#each rowData as row, i}
 				{#if row.type === 'bed-header'}
 					<div
@@ -474,8 +499,11 @@
 				{:else if row.entry}
 					<div
 						class="flex items-center px-3 pl-5 text-sm truncate"
+						class:row-highlight={hoveredRowIdx === i}
 						style="height: {ROW_HEIGHT}px"
 						title={row.entry.flowerName}
+						onmouseenter={() => hoveredRowIdx = i}
+						onmouseleave={() => hoveredRowIdx = null}
 					>
 						<span class="truncate">
 							{row.entry.flowerName}
@@ -496,7 +524,7 @@
 		class="flex-1 overflow-x-auto overflow-y-auto"
 		class:overflow-x-hidden={viewScale === 'month'}
 		bind:this={scrollContainer}
-		onscroll={handleScroll}
+		onscroll={handleChartScroll}
 		data-tour="timeline-chart"
 	>
 		<svg
@@ -740,8 +768,10 @@
 							y={row.y}
 							width={chartWidth}
 							height={ROW_HEIGHT}
-							fill="transparent"
-							class="hover:fill-accent/30"
+							class="row-highlight-rect"
+							class:active={hoveredRowIdx === rowIdx}
+							onmouseenter={() => hoveredRowIdx = rowIdx}
+							onmouseleave={() => hoveredRowIdx = null}
 						/>
 
 						<!-- Phase bars (draggable group for placed plants) -->
@@ -880,3 +910,21 @@
 		</svg>
 	</div>
 </div>
+
+<style>
+	.hide-scrollbar {
+		scrollbar-width: none;
+	}
+	.hide-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	.row-highlight {
+		background: color-mix(in oklch, var(--color-accent) 30%, transparent);
+	}
+	.row-highlight-rect {
+		fill: transparent;
+	}
+	.row-highlight-rect.active {
+		fill: color-mix(in oklch, var(--color-accent) 30%, transparent);
+	}
+</style>
