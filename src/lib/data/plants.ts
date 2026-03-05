@@ -2669,7 +2669,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Japanese beetles', 'Slugs', 'Whiteflies'],
     companionPlants: ['Tomatoes', 'Peppers', 'Oregano', 'Parsley', 'Marigolds'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'indoor' }
     }
   },
   {
@@ -2712,7 +2712,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Cutworms', 'Armyworms', 'Slugs', 'Carrot flies'],
     companionPlants: ['Spinach', 'Cabbage', 'Lettuce', 'Sugar snap peas', 'Dill'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -2798,7 +2798,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Carrot flies', 'Aphids', 'Parsley worms (black swallowtail caterpillars)', 'Whiteflies', 'Slugs'],
     companionPlants: ['Tomatoes', 'Roses', 'Brassicas (cabbage, broccoli)', 'Beans', 'Asparagus'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -3, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 3, method: 'direct' }
     }
   },
   {
@@ -2884,7 +2884,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Root rot (from overwatering)', 'Aphids', 'Bean weevils', 'Cabbage moths'],
     companionPlants: ['Beans', 'Onions', 'Tomatoes', 'Melons', 'Garlic'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -2927,7 +2927,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Thrips', 'Powdery mildew', 'Botrytis (gray mold)', 'Brown leaf spot'],
     companionPlants: ['Cabbage', 'Broccoli', 'Basil', 'Cucumbers', 'Lavender'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -2972,7 +2972,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Thrips', 'Onion flies', 'Mealybugs', 'Downy mildew'],
     companionPlants: ['Carrots', 'Tomatoes', 'Roses', 'Lettuce', 'Celery'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: 0, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 0, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -3017,7 +3017,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Thrips', 'Allium leaf miner', 'Onion fly', 'Black aphids', 'Maggots'],
     companionPlants: ['Tomatoes', 'Carrots', 'Strawberries', 'Beets', 'Peppers'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -3058,7 +3058,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Spider mites', 'Aphids', 'Root rot'],
     companionPlants: ['Cabbage', 'Tomatoes', 'Lavender', 'Rosemary', 'Strawberries'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -3, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 3, method: 'direct' }
     }
   },
   {
@@ -3099,7 +3099,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Leafminers', 'Root rot'],
     companionPlants: ['Tomatoes', 'Peppers', 'Basil', 'Cucumbers', 'Cabbage'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'indoor' }
     }
   },
   {
@@ -3140,7 +3140,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Powdery mildew', 'Whiteflies', 'Slugs'],
     companionPlants: ['Carrots', 'Tomatoes', 'Cabbage', 'Broccoli', 'Rosemary'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -3224,7 +3224,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Flea beetles', 'Loopers', 'Slugs'],
     companionPlants: ['Tomatoes', 'Cabbage', 'Carrots', 'Cauliflower', 'Kale'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -2, weeksOffsetMax: 2, method: 'direct' }
+      primary: { type: 'after-frost', weeksAfter: 0, method: 'direct' }
     }
   },
   {
@@ -4904,7 +4904,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Slugs', 'Cabbage worms', 'Beetles', 'Snails'],
     companionPlants: ['Garlic', 'Cilantro', 'Dill', 'Onions', 'Radishes'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -4952,7 +4952,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Slugs', 'Caterpillars', 'Flea beetles', 'Cutworms'],
     companionPlants: ['Mint', 'Chives', 'Garlic', 'Cilantro', 'Parsley'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5000,7 +5000,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Slugs', 'Caterpillars', 'Flea beetles', 'Cutworms'],
     companionPlants: ['Tomatoes', 'Peppers', 'Spinach', 'Radishes', 'Basil'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5048,7 +5048,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Slugs', 'Armyworms', 'Loopers', 'Leaf miners'],
     companionPlants: ['Garlic', 'Chives', 'Cilantro', 'Parsley', 'Dill'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5096,7 +5096,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Flea beetles', 'Cabbage worms', 'Cabbage loopers', 'Cabbage moths'],
     companionPlants: ['Onions', 'Garlic', 'Dill', 'Rosemary', 'Marigolds'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5144,7 +5144,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage worms', 'Aphids', 'Flea beetles', 'Cabbage moths', 'Cabbage loopers'],
     companionPlants: ['Onions', 'Garlic', 'Herbs', 'Beets', 'Celery'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5192,7 +5192,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage moths', 'Aphids', 'Cabbage loopers', 'Flea beetles', 'Caterpillars'],
     companionPlants: ['Sage', 'Thyme', 'Dill', 'Cilantro', 'Rosemary'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 4, weeksOffsetMax: 6, method: 'direct' }
     }
   },
   {
@@ -5239,7 +5239,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage looper', 'Cabbage worm', 'Cabbage root maggot', 'Aphids', 'Flea beetles'],
     companionPlants: ['Onions', 'Beets', 'Carrots', 'Dill', 'Chamomile'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5286,7 +5286,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage looper', 'Cabbage worm', 'Cabbage root maggot', 'Aphids', 'Flea beetles'],
     companionPlants: ['Carrots', 'Lettuce', 'Onions', 'Beans', 'Tomatoes'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5333,7 +5333,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage looper', 'Cabbage worm', 'Aphids', 'Flea beetles', 'Slugs'],
     companionPlants: ['Onions', 'Garlic', 'Beets', 'Lettuce', 'Spinach'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5380,7 +5380,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Cabbage looper', 'Cabbage worm', 'Cabbage root maggot', 'Aphids', 'Flea beetles'],
     companionPlants: ['Onions', 'Beets', 'Carrots', 'Thyme', 'Sage'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5427,7 +5427,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Onion maggot', 'Thrips', 'Fusarium basal rot', 'Botrytis neck rot', 'Bacterial soft rot'],
     companionPlants: ['Cabbage', 'Carrots', 'Beets', 'Lettuce', 'Tomatoes'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -10, weeksOffsetMax: -8, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 8, weeksOffsetMax: 10, method: 'indoor' }
     }
   },
   {
@@ -5474,7 +5474,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Onion maggot', 'Thrips', 'Fusarium basal rot', 'Botrytis neck rot', 'Bacterial soft rot'],
     companionPlants: ['Cabbage', 'Carrots', 'Beets', 'Lettuce', 'Strawberries'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -10, weeksOffsetMax: -8, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 8, weeksOffsetMax: 10, method: 'indoor' }
     }
   },
   {
@@ -5521,7 +5521,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Onion maggot', 'Thrips', 'Fusarium basal rot', 'Botrytis neck rot', 'Bacterial soft rot'],
     companionPlants: ['Cabbage', 'Carrots', 'Beets', 'Peppers', 'Tomatoes'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -10, weeksOffsetMax: -8, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 8, weeksOffsetMax: 10, method: 'indoor' }
     }
   },
   {
@@ -5568,7 +5568,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Thrips', 'Onion maggots', 'Fusarium basal rot', 'Downy mildew', 'Pink root'],
     companionPlants: ['Carrots', 'Lettuce', 'Tomatoes', 'Strawberries', 'Beets'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -10, weeksOffsetMax: -8, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 8, weeksOffsetMax: 10, method: 'indoor' }
     }
   },
   {
@@ -5616,7 +5616,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Flea beetles', 'Colorado potato beetles', 'Aphids', 'Whiteflies', 'Hornworms'],
     companionPlants: ['Basil', 'Marigolds', 'Oregano', 'Pole beans', 'Broccoli'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5664,7 +5664,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Flea beetles', 'Spider mites', 'Aphids', 'Verticillium wilt', 'Whiteflies'],
     companionPlants: ['Basil', 'Marigolds', 'Spinach', 'Pole beans', 'Broccoli'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5712,7 +5712,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Colorado potato beetle', 'Flea beetles', 'Aphids', 'Spider mites', 'Whiteflies'],
     companionPlants: ['Basil', 'Marigolds', 'Garlic', 'Onions', 'Broccoli'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 6, weeksOffsetMax: 8, method: 'indoor' }
     }
   },
   {
@@ -5900,7 +5900,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Carrot rust fly', 'Aphids', 'Leaf hoppers', 'Carrot weevils', 'Wireworms'],
     companionPlants: ['Onions', 'Lettuce', 'Tomatoes', 'Rosemary', 'Sage'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -5947,7 +5947,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Carrot rust fly', 'Aphids', 'Spider mites', 'Wireworms', 'Carrot weevil'],
     companionPlants: ['Leeks', 'Onions', 'Garlic', 'Rosemary', 'Sage'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -5994,7 +5994,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Carrot rust fly', 'Aphids', 'Wireworms', 'Leaf blight', 'Root rot'],
     companionPlants: ['Garlic', 'Onions', 'Chives', 'Lettuce', 'Radishes'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -6041,7 +6041,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Carrot fly', 'Aphids', 'Wireworms', 'Rabbits', 'Deer'],
     companionPlants: ['Onions', 'Garlic', 'Rosemary', 'Dill', 'Chives'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -6260,7 +6260,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Whiteflies', 'Leafhoppers', 'Caterpillars'],
     companionPlants: ['Cabbage', 'Tomatoes', 'Peas', 'Broccoli', 'Cauliflower'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -6303,7 +6303,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Leafhoppers', 'Caterpillars', 'Powdery mildew'],
     companionPlants: ['Cabbage', 'Tomatoes', 'Strawberries', 'Potatoes', 'Marigolds'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   },
   {
@@ -6346,7 +6346,7 @@ export const PLANT_DATABASE: PlantData[] = [
     commonPests: ['Aphids', 'Spider mites', 'Powdery mildew', 'Rust', 'Fungal diseases'],
     companionPlants: ['Cabbage', 'Tomatoes', 'Strawberries', 'Potatoes', 'Marigolds'],
     plantingSchedule: {
-      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -4, weeksOffsetMax: -2, method: 'direct' }
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: 2, weeksOffsetMax: 4, method: 'direct' }
     }
   }
 ];

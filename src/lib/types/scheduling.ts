@@ -7,6 +7,10 @@
 /**
  * Planting relative to last/first frost date.
  * Used for flowers like Snapdragons: "Start indoors 8-12 weeks before last frost"
+ *
+ * Offset values must be positive — the scheduling code negates them internally
+ * to place the date before the frost reference. For example, weeksOffsetMin: 4
+ * means "4 weeks before frost", not "4 weeks after".
  */
 export interface RelativeToFrostTiming {
 	type: 'relative-to-frost';
