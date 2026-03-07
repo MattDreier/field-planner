@@ -8,7 +8,7 @@
 	import SelectionDistance from './SelectionDistance.svelte';
 	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, FenceVertex, Tool, DragSource, SunSimulationState } from '$lib/types';
 	import { getBedDimensionsInInches } from '$lib/types';
-	import { fieldToCanvas, canvasToField, bedLocalToField } from '$lib/utils/coordinates';
+	import { fieldToCanvas, canvasToField, bedLocalToField, fieldToBedLocal, isInsideBed } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
 	import { calculateHeightColors } from '$lib/utils/color';
 	import {
@@ -714,14 +714,13 @@
 		const canvasY = e.clientY - rect.top;
 		const fieldPos = canvasToField(canvasX, canvasY, canvasState);
 
-		// Find which bed the drop is in
+		// Find which bed the drop is in (rotation-aware hit detection)
 		for (const bed of beds) {
-			const dims = getBedDimensionsInInches(bed);
-			const bedEndX = bed.x + dims.width;
-			const bedEndY = bed.y + dims.height;
+			// Inverse-rotate point for hit detection against axis-aligned bounds
+			const localForHitTest = fieldToBedLocal(fieldPos.x, fieldPos.y, bed);
 
-			if (fieldPos.x >= bed.x && fieldPos.x <= bedEndX && fieldPos.y >= bed.y && fieldPos.y <= bedEndY) {
-				// Calculate local position within bed
+			if (isInsideBed(localForHitTest.x, localForHitTest.y, bed)) {
+				// Store simple offset as local coords (rendering uses bed.x + plant.x, no rotation)
 				const localX = fieldPos.x - bed.x;
 				const localY = fieldPos.y - bed.y;
 
