@@ -132,7 +132,7 @@
 						</div>
 						<p class="text-sm font-semibold">{formatRange(plant.vaseLifeDays, plant.vaseLifeDaysMax)} days</p>
 					</div>
-				{:else if plant.kind === 'vegetable' && plant.daysToMaturity}
+				{:else if (plant.kind === 'vegetable' || plant.kind === 'fruit') && plant.daysToMaturity}
 					<div class="bg-muted/50 rounded-lg p-3">
 						<div class="flex items-center gap-2 text-muted-foreground mb-1">
 							<Calendar class="w-4 h-4" />
@@ -241,6 +241,35 @@
 						{/if}
 						{#if plant.bloomsPerPlant}
 							<p><span class="text-muted-foreground">Blooms per plant:</span> {plant.bloomsPerPlant}</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			{#if plant.kind === 'fruit'}
+				<div>
+					<h3 class="text-sm font-medium mb-2">Harvest Info</h3>
+					<div class="text-sm space-y-1">
+						{#if plant.ediblePart}
+							<p><span class="text-muted-foreground">Edible part:</span> <span class="capitalize">{plant.ediblePart}</span></p>
+						{/if}
+						{#if plant.cutAndComeAgain !== undefined}
+							<p>
+								<span class="text-muted-foreground">Continuous harvest:</span>
+								{plant.cutAndComeAgain ? 'Yes' : 'No'}
+							</p>
+						{/if}
+						{#if plant.cutAndComeAgainNotes}
+							<p class="text-muted-foreground">{plant.cutAndComeAgainNotes}</p>
+						{/if}
+						{#if plant.yieldPerPlant}
+							<p><span class="text-muted-foreground">Yield per plant:</span> {plant.yieldPerPlant}</p>
+						{/if}
+						{#if plant.flavorProfile}
+							<p><span class="text-muted-foreground">Flavor:</span> {plant.flavorProfile}</p>
+						{/if}
+						{#if plant.storageLife}
+							<p><span class="text-muted-foreground">Storage:</span> {plant.storageLife}</p>
 						{/if}
 					</div>
 				</div>

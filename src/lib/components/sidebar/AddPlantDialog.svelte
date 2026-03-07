@@ -237,6 +237,7 @@
 						<option value="flower">Flower</option>
 						<option value="vegetable">Vegetable</option>
 						<option value="herb">Herb</option>
+						<option value="fruit">Fruit</option>
 					</select>
 				</div>
 

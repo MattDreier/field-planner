@@ -11,7 +11,8 @@
 	const kinds: { value: PlantData['kind']; label: string }[] = [
 		{ value: 'flower', label: 'Flower' },
 		{ value: 'vegetable', label: 'Vegetable' },
-		{ value: 'herb', label: 'Herb' }
+		{ value: 'herb', label: 'Herb' },
+		{ value: 'fruit', label: 'Fruit' }
 	];
 </script>
 
