@@ -6720,6 +6720,49 @@ export const PLANT_DATABASE: PlantData[] = [
     plantingSchedule: {
       primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -6, weeksOffsetMax: -4, method: 'direct' }
     }
+  },
+  {
+    id: 'marigold',
+    name: 'Marigold',
+    scientificName: 'Tagetes erecta',
+    category: 'annual',
+    propagationMethod: 'seed',
+    kind: 'flower',
+    daysToGermination: 3,
+    daysToGerminationMax: 7,
+    germinationTempMin: 70,
+    germinationTempMax: 75,
+    germinationNotes: 'Fast and reliable; sow 1/4" deep in warm soil; radicle emergence in 2-3 days',
+    daysToHarvest: 75,
+    daysToHarvestMax: 90,
+    heightMin: 24,
+    heightMax: 40,
+    spacingMin: 10,
+    spacingMax: 12,
+    lightRequirements: 'Full sun (6-8+ hours)',
+    wateringNeeds: 'Moderate; 1" per week; allow soil surface to dry slightly between waterings; drought-tolerant once established',
+    humidity: 'Low to moderate; high humidity can encourage botrytis and powdery mildew',
+    soilPH: '6.0-7.0',
+    soilType: 'Well-drained, moderately fertile; tolerates poor soil; avoid waterlogged conditions',
+    fertilizer: 'Light feeder; balanced slow-release at planting; avoid excess nitrogen which reduces blooms',
+    cutAndComeAgain: true,
+    cutAndComeAgainNotes: 'Prolific cut-and-come-again producer; cutting stems just above a leaf node encourages branching and continuous flowering',
+    harvestWindowDays: 90,
+    harvestWindowDaysMax: 120,
+    vaseLifeDays: 7,
+    vaseLifeDaysMax: 14,
+    bloomsPerPlant: '15-30+ blooms per season',
+    plantType: 'Annual',
+    usdaZones: 'Frost-sensitive (all zones as annual)',
+    whenToPlant: 'Start indoors 6-8 weeks before last frost; direct sow or transplant after last frost when soil reaches 65°F+',
+    specialNotes: 'Peak summer heat may cause temporary bloom decline; blooms from early summer until hard frost. Avoid excess nitrogen which promotes foliage over flowers. Excellent companion plant for pest deterrence.',
+    colors: ['yellow', 'orange', 'red', 'white'],
+    harvestTips: 'Cut when flowers are fully open in the cool of the morning; cut just above a leaf node; place stems in water immediately',
+    commonPests: ['aphids', 'spider mites', 'thrips', 'slugs', 'leafhoppers'],
+    companionPlants: ['Tomatoes', 'Peppers', 'Basil', 'Squash', 'Roses'],
+    plantingSchedule: {
+      primary: { type: 'relative-to-frost', reference: 'last', weeksOffsetMin: -8, weeksOffsetMax: -6, method: 'indoor' }
+    }
   }
 ];
 
