@@ -32,12 +32,30 @@ export function fieldToCanvas(
 }
 
 /**
- * Convert field inches to bed-local inches
+ * Convert field inches to bed-local inches (rotation-aware).
+ * When a bed is rotated, the field point is inverse-rotated around the
+ * bed's center so that hit-detection works against the axis-aligned bounds.
  */
 export function fieldToBedLocal(fieldX: number, fieldY: number, bed: Bed): { x: number; y: number } {
+	const dims = getBedDimensionsInInches(bed);
+	const centerX = bed.x + dims.width / 2;
+	const centerY = bed.y + dims.height / 2;
+	const rotation = bed.rotation ?? 0;
+
+	if (rotation === 0) {
+		return { x: fieldX - bed.x, y: fieldY - bed.y };
+	}
+
+	// Inverse-rotate the point around the bed center
+	const rad = (-rotation * Math.PI) / 180;
+	const cos = Math.cos(rad);
+	const sin = Math.sin(rad);
+	const dx = fieldX - centerX;
+	const dy = fieldY - centerY;
+
 	return {
-		x: fieldX - bed.x,
-		y: fieldY - bed.y
+		x: cos * dx - sin * dy + dims.width / 2,
+		y: sin * dx + cos * dy + dims.height / 2
 	};
 }
 

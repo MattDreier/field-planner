@@ -18,6 +18,8 @@ export interface TourStep {
 	placement: 'top' | 'bottom' | 'left' | 'right';
 	/** Optional: additional Y offset in pixels (negative = higher) */
 	offsetY?: number;
+	/** Optional: auto-advance after this many milliseconds (for informational steps) */
+	autoAdvanceMs?: number;
 	completionCondition: (state: TourAppState) => boolean;
 }
 
@@ -25,7 +27,7 @@ export interface TourAppState {
 	currentTool: string;
 	bedsLength: number;
 	plantsLength: number;
-	detailsFlowerId: string | null;
+	detailsPlantId: string | null;
 	detailsScrolledToBottom: boolean;
 	timelinePanelOpen: boolean;
 	currentViewDate: string;
@@ -34,6 +36,8 @@ export interface TourAppState {
 	timeOfDay: number;
 	/** Set to true when user releases the time slider (change event) */
 	timeSliderReleased: boolean;
+	/** Set to true when user releases the timeline scrubber (mouseup event) */
+	timelineScrubberReleased: boolean;
 	// Phase dates for first plant (used by timeline tour steps)
 	firstPlantGrowingStart?: string; // ISO date
 	firstPlantHarvestStart?: string; // ISO date
@@ -69,15 +73,15 @@ export const TOUR_STEPS: TourStep[] = [
 	},
 	{
 		id: 'flower-details',
-		title: 'Explore a Flower',
-		description: 'Click on a flower card to see detailed growing information.',
+		title: 'Explore a Plant',
+		description: 'Click on a plant card to see detailed growing information.',
 		targetSelector: '[data-tour="flower-zinnias"]',
 		placement: 'bottom',
-		completionCondition: (state) => state.detailsFlowerId === 'zinnias'
+		completionCondition: (state) => state.detailsPlantId === 'zinnias'
 	},
 	{
 		id: 'explore-details',
-		title: 'Learn About This Flower',
+		title: 'Learn About This Plant',
 		description:
 			'Scroll through the details panel to learn about spacing, growing conditions, harvest tips, and more!',
 		targetSelector: '[data-tour="details-panel"]',
@@ -87,10 +91,10 @@ export const TOUR_STEPS: TourStep[] = [
 	{
 		id: 'close-details',
 		title: 'Close the Details Panel',
-		description: "Click the X to close the flower details panel when you're done exploring.",
+		description: "Click the X to close the plant details panel when you're done exploring.",
 		targetSelector: '[data-tour="close-details"]',
 		placement: 'bottom',
-		completionCondition: (state) => state.detailsFlowerId === null
+		completionCondition: (state) => state.detailsPlantId === null
 	},
 	{
 		id: 'place-plant',
@@ -117,6 +121,7 @@ export const TOUR_STEPS: TourStep[] = [
 			'Drag the orange scrubber into the green "Growing" phase. Watch your flower grow as you move through time!',
 		targetSelector: '[data-tour="phase-growing"]',
 		spotlightSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]'],
 		placement: 'top',
 		completionCondition: (state) => {
 			// Complete when scrubber reaches the start of the first plant's growing phase
@@ -133,10 +138,11 @@ export const TOUR_STEPS: TourStep[] = [
 			'Keep dragging into the coral "Harvest" phase. See how your flower is now ready to cut!',
 		targetSelector: '[data-tour="phase-harvest"]',
 		spotlightSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]'],
 		placement: 'top',
 		completionCondition: (state) => {
-			// Complete when scrubber reaches the start of the first plant's harvest phase
-			if (!state.firstPlantHarvestStart) return false;
+			// Complete when user releases scrubber AND it's in the harvest phase
+			if (!state.firstPlantHarvestStart || !state.timelineScrubberReleased) return false;
 			const current = new Date(state.currentViewDate + 'T12:00:00');
 			const harvestStart = new Date(state.firstPlantHarvestStart + 'T12:00:00');
 			return current >= harvestStart;
@@ -176,11 +182,41 @@ export const TOUR_STEPS: TourStep[] = [
 		id: 'time-of-day',
 		title: 'Adjust Time of Day',
 		description:
-			'Move the time slider to see how shadows change throughout the day. Watch the shadows move across your plants!',
+			'Move the time slider to see how shadows change throughout the day. Watch for plants that turn gray—they are being overshadowed by taller neighbors!',
 		targetSelector: '[data-tour="time-slider"]',
 		additionalSpotlights: ['[data-tour="garden-content"]'],
-		placement: 'right',
+		placement: 'bottom',
 		completionCondition: (state) => state.timeSliderReleased
+	},
+	{
+		id: 'seasonal-shadows',
+		title: 'Watch Shadows Through the Seasons',
+		description:
+			"Drag the timeline scrubber between the Last Frost and First Frost markers. Watch how shadows shift as the sun's position changes throughout the year, and see your plants grow!",
+		targetSelector: '[data-tour="timeline-chart"]',
+		additionalSpotlights: ['[data-tour="garden-content"]'],
+		placement: 'left',
+		completionCondition: (state) => state.timelineScrubberReleased
+	},
+	{
+		id: 'collapse-timeline',
+		title: 'Collapse the Timeline',
+		description:
+			'Click the down arrow to collapse the timeline panel and get a full view of your garden.',
+		targetSelector: '[data-tour="timeline-toggle"]',
+		placement: 'top',
+		completionCondition: (state) => state.timelinePanelOpen === false
+	},
+	{
+		id: 'height-legend',
+		title: 'Understanding Plant Heights',
+		description:
+			'The color legend shows plant heights. Shorter plants are blue, taller plants are red. This helps you plan your garden so tall plants don\'t shade shorter ones!',
+		targetSelector: '[data-tour="height-legend"]',
+		additionalSpotlights: ['[data-tour="first-placed-plant"]', '[data-tour="second-placed-plant"]'],
+		placement: 'right',
+		autoAdvanceMs: 6000,
+		completionCondition: () => false
 	},
 	{
 		id: 'sign-in',
@@ -202,6 +238,8 @@ export const tourState = $state({
 	showWelcome: false,
 	currentStepIndex: 0,
 	hasSeenTour: false,
+	// Track the furthest step the user has reached (for back/forward navigation)
+	furthestStepIndex: 0,
 	// Track previous values for comparison-based conditions
 	previousState: null as TourAppState | null,
 	// Prevent multiple step completions during rapid state changes
@@ -234,6 +272,7 @@ export function startTour(): void {
 	tourState.showWelcome = false;
 	tourState.isActive = true;
 	tourState.currentStepIndex = 1; // Skip welcome step (index 0)
+	tourState.furthestStepIndex = 1; // Reset furthest step when starting fresh
 	tourState.previousState = null;
 	tourState.isAdvancing = false;
 }
@@ -250,9 +289,31 @@ export function skipTour(): void {
 export function nextStep(): void {
 	if (tourState.currentStepIndex < TOUR_STEPS.length - 1) {
 		tourState.currentStepIndex++;
+		// Track the furthest step reached
+		if (tourState.currentStepIndex > tourState.furthestStepIndex) {
+			tourState.furthestStepIndex = tourState.currentStepIndex;
+		}
 	} else {
 		completeTour();
 	}
+}
+
+// Move to previous step
+export function prevStep(): void {
+	// Minimum step is 1 (step 0 is the welcome modal)
+	if (tourState.currentStepIndex > 1) {
+		tourState.currentStepIndex--;
+	}
+}
+
+// Check if user can go back to a previous step
+export function canGoBack(): boolean {
+	return tourState.currentStepIndex > 1;
+}
+
+// Check if user can go forward (only to previously visited steps)
+export function canGoForward(): boolean {
+	return tourState.currentStepIndex < tourState.furthestStepIndex;
 }
 
 // Complete the tour
@@ -276,6 +337,7 @@ export function resetTour(): void {
 	tourState.isActive = false;
 	tourState.showWelcome = false;
 	tourState.currentStepIndex = 0;
+	tourState.furthestStepIndex = 0;
 	tourState.previousState = null;
 	tourState.isAdvancing = false;
 	if (typeof window !== 'undefined') {

@@ -9,14 +9,15 @@
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, DragSource, Bed, PlacedPlant, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import type { Tool, DragSource, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2, HelpCircle } from 'lucide-svelte';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
 	import { history } from '$lib/stores/history.svelte';
 	import { isConvexAvailable } from '$lib/stores/persistence.svelte';
-	import { timelineState, togglePanel, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
-	import { getFlowerById, FLOWER_DATABASE } from '$lib/data/flowers';
+	import { timelineState, removePlannedPlantsByBed } from '$lib/stores/timeline.svelte';
+	import { getPlantById } from '$lib/data/plants';
+	import { getUserPlants } from '$lib/stores/userPlants.svelte';
 	import { calculateLifecyclePhases, formatDateISO } from '$lib/utils/timeline';
 	import { calculateOptimalPlantingDate } from '$lib/utils/scheduling';
 	import { untrack } from 'svelte';
@@ -81,7 +82,7 @@
 	let currentTool = $state<Tool>('select');
 	let selectedBedIds = $state<Set<Id<'beds'>>>(new Set());
 	let selectedPlantIds = $state<Set<Id<'placedPlants'>>>(new Set());
-	let viewingFlowerId = $state<string | null>(null); // For viewing flower details from palette
+	let viewingPlantId = $state<string | null>(null); // For viewing flower details from palette
 	let dragSource = $state<DragSource>(null);
 	let showSuccessionPlanner = $state(false);
 
@@ -101,7 +102,8 @@
 	let bedDefaults = $state({
 		widthFeet: 4,
 		heightFeet: 8,
-		rotation: 0
+		rotation: 0,
+		raisedBedHeightFeet: 0
 	});
 
 	// Sun simulation state
@@ -112,8 +114,9 @@
 		timeOfDay: 0.5 // noon
 	});
 
-	// Tour-specific state: tracks when time slider is released (for tour step completion)
+	// Tour-specific state: tracks when sliders are released (for tour step completion)
 	let timeSliderReleased = $state(false);
+	let timelineScrubberReleased = $state(false);
 
 	// Derive shadow month from timeline's current view date
 	// Use continuous month value (0-11.99) for smooth sun position interpolation
@@ -133,9 +136,12 @@
 		month: shadowMonth
 	});
 
-	// Local state for beds and plants
+	// Local state for beds, plants, and fences
 	let beds = $state<Bed[]>([]);
 	let plants = $state<PlacedPlant[]>([]);
+	let fences = $state<Fence[]>([]);
+	let selectedFenceIds = $state<Set<Id<'fences'>>>(new Set());
+	let fenceDefaults = $state({ heightFeet: 6 });
 
 	// Track unsaved changes by comparing current state to last saved state
 	const hasUnsavedChanges = $derived.by(() => {
@@ -160,6 +166,7 @@
 			initializeTour();
 		});
 	});
+
 
 	// Derived: get the currently selected bed (for single-selection UI like resize panel)
 	const selectedBed = $derived(
@@ -269,17 +276,45 @@
 				selectedPlantIds = new Set([id]);
 			}
 			selectedBedIds = new Set();
+			selectedFenceIds = new Set();
 		}
-		viewingFlowerId = null; // Clear palette selection when selecting a placed plant
+		viewingPlantId = null; // Clear palette selection when selecting a placed plant
+	}
+
+	function selectFence(id: Id<'fences'> | null, shiftKey = false) {
+		if (id === null) {
+			selectedFenceIds = new Set();
+			return;
+		}
+
+		if (shiftKey) {
+			// Shift+click: toggle in selection
+			const newSet = new Set(selectedFenceIds);
+			if (newSet.has(id)) {
+				newSet.delete(id);
+			} else {
+				newSet.add(id);
+			}
+			selectedFenceIds = newSet;
+		} else {
+			// Regular click: single selection (toggle if same)
+			if (selectedFenceIds.size === 1 && selectedFenceIds.has(id)) {
+				selectedFenceIds = new Set();
+			} else {
+				selectedFenceIds = new Set([id]);
+			}
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+		}
 	}
 
 	// Handle clicking a flower in the palette
-	function handleFlowerClick(flowerId: string) {
+	function handlePlantClick(flowerId: string) {
 		// Toggle: clicking same flower again closes panel
-		if (flowerId === viewingFlowerId) {
-			viewingFlowerId = null;
+		if (flowerId === viewingPlantId) {
+			viewingPlantId = null;
 		} else {
-			viewingFlowerId = flowerId;
+			viewingPlantId = flowerId;
 		}
 		selectedPlantIds = new Set(); // Clear placed plant selection
 		selectedBedIds = new Set();
@@ -299,15 +334,15 @@
 		selectedPlantIds.size === 1 ? plants.find((p) => selectedPlantIds.has(p._id)) ?? null : null
 	);
 
-	// Determine which flower to show in details panel (placed plant takes priority)
-	const detailsFlowerId = $derived(selectedPlant?.flowerId ?? viewingFlowerId);
+	// Determine which flower to show in details panel (only from palette clicks)
+	const detailsPlantId = $derived(viewingPlantId);
 
 	// Track when user scrolls to bottom of details panel (for tour)
 	let detailsScrolledToBottom = $state(false);
 
 	// Reset scroll tracking when details panel closes or flower changes
 	$effect(() => {
-		if (!detailsFlowerId) {
+		if (!detailsPlantId) {
 			detailsScrolledToBottom = false;
 		}
 	});
@@ -319,7 +354,7 @@
 		const firstPlant = plants[0];
 		if (!firstPlant.plantingDates) return { growingStart: undefined, harvestStart: undefined };
 
-		const flower = FLOWER_DATABASE.find(f => f.id === firstPlant.flowerId);
+		const flower = getPlantById(firstPlant.flowerId, getUserPlants());
 		if (!flower) return { growingStart: undefined, harvestStart: undefined };
 
 		const phases = calculateLifecyclePhases(firstPlant.plantingDates, flower);
@@ -338,12 +373,12 @@
 	});
 
 	// Tour state tracking - gather all state needed for completion checking
-	// Must be defined after detailsFlowerId since it depends on it
+	// Must be defined after detailsPlantId since it depends on it
 	const appStateForTour = $derived<TourAppState>({
 		currentTool,
 		bedsLength: beds.length,
 		plantsLength: plants.length,
-		detailsFlowerId,
+		detailsPlantId,
 		detailsScrolledToBottom,
 		timelinePanelOpen: timelineState.isPanelOpen,
 		currentViewDate: timelineState.currentViewDate,
@@ -351,6 +386,7 @@
 		latitude: timelineState.gardenSettings.latitude,
 		timeOfDay: sunSimulationBase.timeOfDay,
 		timeSliderReleased,
+		timelineScrubberReleased,
 		firstPlantGrowingStart: firstPlantPhaseDates.growingStart,
 		firstPlantHarvestStart: firstPlantPhaseDates.harvestStart
 	});
@@ -373,6 +409,7 @@
 		// Reset flags when entering any step (they'll be set again by user actions)
 		untrack(() => {
 			timeSliderReleased = false;
+			timelineScrubberReleased = false;
 		});
 	});
 
@@ -396,6 +433,7 @@
 			widthFeet,
 			...(shape === 'rectangle' ? { heightFeet: heightFeet! } : {}),
 			rotation: bedDefaults.rotation, // Apply default rotation to new beds
+			raisedBedHeightFeet: bedDefaults.raisedBedHeightFeet, // Apply default raised height
 			createdAt: Date.now()
 		} as Bed;
 		beds = [...beds, newBed];
@@ -430,6 +468,15 @@
 		);
 	}
 
+	// Bed raised height handler
+	function handleUpdateBedRaisedHeight(id: Id<'beds'>, raisedBedHeightFeet: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+		beds = beds.map((b) =>
+			b._id === id ? { ...b, raisedBedHeightFeet } : b
+		);
+	}
+
 	// Sun simulation update handler (month and latitude are controlled by timeline/zone, so we filter them out)
 	function handleUpdateSunSimulation(update: Partial<SunSimulationState>) {
 		const { month: _month, latitude: _latitude, ...rest } = update;
@@ -438,7 +485,7 @@
 
 	// Determine if a flower should be started indoors based on its data
 	function isIndoorStartFlower(flowerId: string): boolean {
-		const flower = getFlowerById(flowerId);
+		const flower = getPlantById(flowerId, getUserPlants());
 		if (!flower) return false;
 
 		// Check propagation method - transplant implies indoor start
@@ -480,7 +527,7 @@
 		history.push(beds, plants);
 
 		// Get flower data for scheduling
-		const flower = FLOWER_DATABASE.find(f => f.id === flowerId);
+		const flower = getPlantById(flowerId, getUserPlants());
 
 		let plantingDates: PlantingDates;
 
@@ -524,9 +571,54 @@
 		);
 	}
 
+	// Fence creation handler
+	function handleCreateFence(vertices: FenceVertex[], heightFeet: number) {
+		// Save state before mutation
+		history.push(beds, plants);
+
+		const newFence: Fence = {
+			_id: `fence-${Date.now()}` as Id<'fences'>,
+			layoutId: 'local-layout' as Id<'layouts'>,
+			vertices,
+			heightFeet,
+			createdAt: Date.now()
+		};
+		fences = [...fences, newFence];
+		setTool('select');
+	}
+
+	// Fence move handler (moves entire fence by delta inches)
+	function handleMoveFence(id: Id<'fences'>, deltaX: number, deltaY: number) {
+		fences = fences.map((f) =>
+			f._id === id
+				? {
+					...f,
+					vertices: f.vertices.map(v => ({
+						x: v.x + deltaX,
+						y: v.y + deltaY
+					}))
+				}
+				: f
+		);
+	}
+
+	// Fence vertex move handler
+	function handleMoveVertex(fenceId: Id<'fences'>, vertexIndex: number, newX: number, newY: number) {
+		fences = fences.map((f) =>
+			f._id === fenceId
+				? {
+					...f,
+					vertices: f.vertices.map((v, i) =>
+						i === vertexIndex ? { x: newX, y: newY } : v
+					)
+				}
+				: f
+		);
+	}
+
 	// Delete handler - supports multi-selection
 	function handleDelete() {
-		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0) {
+		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0 || selectedFenceIds.size > 0) {
 			// Save state before mutation
 			history.push(beds, plants);
 
@@ -544,8 +636,14 @@
 				beds = beds.filter((b) => !selectedBedIds.has(b._id));
 			}
 
+			// Delete selected fences
+			if (selectedFenceIds.size > 0) {
+				fences = fences.filter((f) => !selectedFenceIds.has(f._id));
+			}
+
 			selectedPlantIds = new Set();
 			selectedBedIds = new Set();
+			selectedFenceIds = new Set();
 		}
 	}
 
@@ -671,12 +769,13 @@
 			// Clear selection
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
+			selectedFenceIds = new Set();
 		}
 
-		// Toggle timeline panel with 'T'
-		if (e.key === 't' || e.key === 'T') {
+		// Fence tool shortcut
+		if (e.key === 'f' || e.key === 'F') {
 			e.preventDefault();
-			togglePanel();
+			setTool('fence');
 		}
 
 		// Toggle snap alignment with 'S'
@@ -888,7 +987,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="flex flex-col h-screen">
+<div class="fixed inset-0 flex flex-col">
 	<!-- Header -->
 	<header class="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
 		<div>
@@ -969,25 +1068,28 @@
 		<aside class="w-80 border-r border-border bg-card flex flex-col overflow-hidden">
 			<BedTools
 				currentTool={currentTool}
-				hasSelection={!!selectedBedId || !!selectedPlantId}
+				hasSelection={!!selectedBedId || !!selectedPlantId || selectedFenceIds.size > 0}
 				{selectedBed}
 				{sunSimulation}
 				{bedDefaults}
+				{fenceDefaults}
 				{snapEnabled}
 				{snapTemporarilyDisabled}
 				onToolChange={setTool}
 				onDelete={handleDelete}
 				onResizeBed={(id, widthFeet, heightFeet) => handleResizeBed(id as Id<'beds'>, widthFeet, heightFeet ?? widthFeet)}
 				onRotateBed={(id, rotation) => handleRotateBed(id as Id<'beds'>, rotation)}
+				onUpdateBedRaisedHeight={(id, height) => handleUpdateBedRaisedHeight(id as Id<'beds'>, height)}
 				onUpdateSunSimulation={handleUpdateSunSimulation}
 				onUpdateBedDefaults={(updates) => bedDefaults = { ...bedDefaults, ...updates }}
+				onUpdateFenceDefaults={(updates) => fenceDefaults = { ...fenceDefaults, ...updates }}
 				onToggleSnap={() => snapEnabled = !snapEnabled}
 				onTimeSliderRelease={() => timeSliderReleased = true}
 			/>
 
 			{#if currentTool === 'select'}
 				<div class="flex-1 overflow-hidden">
-					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onFlowerClick={handleFlowerClick} />
+					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onPlantClick={handlePlantClick} />
 				</div>
 			{/if}
 
@@ -1005,17 +1107,24 @@
 				tool={currentTool}
 				{beds}
 				{plants}
+				{fences}
 				{selectedBedIds}
 				{selectedPlantIds}
+				{selectedFenceIds}
 				{dragSource}
 				{sunSimulation}
 				{bedDefaults}
+				{fenceDefaults}
 				onSelectBed={selectBed}
 				onSelectPlant={selectPlant}
+				onSelectFence={selectFence}
 				onCreateBed={handleCreateBed}
+				onCreateFence={handleCreateFence}
 				onMoveBed={handleMoveBed}
 				onResizeBed={handleResizeBed}
 				onRotateBed={handleRotateBed}
+				onMoveFence={handleMoveFence}
+				onMoveVertex={handleMoveVertex}
 				onPlacePlant={handlePlacePlant}
 				onMovePlant={handleMovePlant}
 				onMoveStart={handleMoveStart}
@@ -1041,17 +1150,18 @@
 				gardenSettings={timelineState.gardenSettings}
 				onOpenSuccessionPlanner={openSuccessionPlanner}
 				onUpdatePlantDates={handleUpdatePlantDates}
+				onScrubberRelease={() => timelineScrubberReleased = true}
 			/>
 		</main>
 
 		<!-- Plant details slide-out panel -->
-		{#if detailsFlowerId}
+		{#if detailsPlantId}
 			<PlantDetails
-				flowerId={detailsFlowerId}
+				plantId={detailsPlantId}
 				selectedPlant={selectedPlant}
 				onClose={() => {
 					selectedPlantIds = new Set();
-					viewingFlowerId = null;
+					viewingPlantId = null;
 				}}
 				onScrolledToBottom={() => {
 					detailsScrolledToBottom = true;

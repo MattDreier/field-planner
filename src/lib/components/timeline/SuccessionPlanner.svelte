@@ -2,7 +2,8 @@
 	import { X, Calendar, Repeat, Sprout, Info, ChevronRight } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { FLOWER_DATABASE, getFlowerById, type FlowerData } from '$lib/data/flowers';
+	import { getPlantById, type PlantData, getAllPlantsWithUserPlants } from '$lib/data/plants';
+	import { getUserPlants } from '$lib/stores/userPlants.svelte';
 	import type { Bed } from '$lib/types';
 	import {
 		suggestSuccessionInterval,
@@ -39,7 +40,7 @@
 	let customPlantingCount = $state(4);
 
 	// Derived state
-	const selectedFlower = $derived(selectedFlowerId ? getFlowerById(selectedFlowerId) : null);
+	const selectedFlower = $derived(selectedFlowerId ? getPlantById(selectedFlowerId, getUserPlants()) : null);
 	const selectedBed = $derived(beds.find((b) => b._id === selectedBedId));
 
 	// Calculate season length from frost dates
@@ -134,7 +135,7 @@
 		useCustomCount = false;
 
 		// Auto-fill first planting date based on flower's schedule
-		const flower = selectedFlowerId ? getFlowerById(selectedFlowerId) : null;
+		const flower = selectedFlowerId ? getPlantById(selectedFlowerId, getUserPlants()) : null;
 		if (flower?.plantingSchedule) {
 			const lastFrost = parseDate(timelineState.gardenSettings.lastFrostDate);
 			const firstFrost = parseDate(timelineState.gardenSettings.firstFrostDate);
@@ -230,20 +231,20 @@
 		<div class="overflow-y-auto max-h-[calc(90vh-140px)] p-4 space-y-4">
 			<!-- Selection Section -->
 			<div class="grid gap-4 sm:grid-cols-2">
-				<!-- Flower Selection -->
+				<!-- Plant Selection -->
 				<div>
-					<label for="flower-select" class="block text-sm font-medium mb-1.5">
-						Flower
+					<label for="plant-select" class="block text-sm font-medium mb-1.5">
+						Plant
 					</label>
 					<select
-						id="flower-select"
+						id="plant-select"
 						class="w-full h-10 px-3 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
 						value={selectedFlowerId}
 						onchange={handleFlowerChange}
 					>
-						<option value="">Select a flower...</option>
-						{#each FLOWER_DATABASE as flower}
-							<option value={flower.id}>{flower.name}</option>
+						<option value="">Select a plant...</option>
+						{#each getAllPlantsWithUserPlants(getUserPlants()) as plant}
+							<option value={plant.id}>{plant.name}</option>
 						{/each}
 					</select>
 				</div>
@@ -315,7 +316,7 @@
 					value={coverageType}
 					onchange={handleCoverageChange}
 				>
-					<option value="continuous">Continuous - Fresh flowers always available</option>
+					<option value="continuous">Continuous - Always something to harvest</option>
 					<option value="staggered">Staggered - Periodic harvests with gaps</option>
 					<option value="single">Single - One-time planting only</option>
 				</select>

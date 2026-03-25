@@ -2,7 +2,7 @@
  * Timeline utility functions for lifecycle phase calculations and succession planning
  */
 
-import type { FlowerData } from '$lib/data/flowers';
+import type { PlantData } from '$lib/data/plants';
 import type { PlantingDates } from '$lib/types';
 
 // Phase colors - muted, harmonious palette with semantic meaning
@@ -68,7 +68,7 @@ export function formatDateShort(date: Date): string {
  */
 export function calculateLifecyclePhases(
 	plantingDates: PlantingDates,
-	flowerData: FlowerData
+	plantData: PlantData
 ): PhaseData[] {
 	const phases: PhaseData[] = [];
 
@@ -81,7 +81,7 @@ export function calculateLifecyclePhases(
 	if (!startDate) return phases;
 
 	// Germination duration
-	const germinationDays = flowerData.daysToGerminationMax ?? flowerData.daysToGermination;
+	const germinationDays = plantData.daysToGerminationMax ?? plantData.daysToGermination;
 
 	// Indoor start phase (for plants started indoors)
 	if (indoorStart) {
@@ -128,7 +128,7 @@ export function calculateLifecyclePhases(
 		const growingStart = directSow ? addDays(directSow, germinationDays) : outdoorStart;
 
 		// Days to harvest is from transplant/sow date
-		const harvestStart = addDays(outdoorStart, flowerData.daysToHarvest);
+		const harvestStart = addDays(outdoorStart, plantData.daysToHarvest);
 
 		phases.push({
 			phase: 'growing',
@@ -138,17 +138,8 @@ export function calculateLifecyclePhases(
 			label: 'Growing outdoors'
 		});
 
-		// Harvest window duration
-		// For cut-and-come-again, extend the harvest window significantly
-		let harvestDuration: number;
-		if (flowerData.cutAndComeAgain) {
-			harvestDuration = 60; // 2 months of repeated harvests
-		} else {
-			// Use the difference between min and max harvest days, plus vase life as buffer
-			const harvestRange =
-				(flowerData.daysToHarvestMax ?? flowerData.daysToHarvest) - flowerData.daysToHarvest;
-			harvestDuration = Math.max(14, harvestRange + 7);
-		}
+		// Harvest window from plant data — how long this planting actively produces
+		const harvestDuration = plantData.harvestWindowDaysMax ?? plantData.harvestWindowDays;
 
 		phases.push({
 			phase: 'harvest-window',
@@ -172,10 +163,11 @@ export interface SuccessionSuggestion {
 }
 
 /**
- * Suggest succession planting intervals based on flower data and season length
+ * Suggest succession planting intervals based on plant data and season length.
+ * Uses harvestWindowDays as the single source of truth for all plant kinds.
  */
 export function suggestSuccessionInterval(
-	flowerData: FlowerData,
+	plantData: PlantData,
 	seasonLengthDays: number,
 	desiredCoverage: 'continuous' | 'staggered' | 'single' = 'continuous'
 ): SuccessionSuggestion {
@@ -187,39 +179,20 @@ export function suggestSuccessionInterval(
 		};
 	}
 
-	// Base interval on vase life for continuous fresh flowers
-	const vaseLife = flowerData.vaseLifeDaysMax ?? flowerData.vaseLifeDays;
+	const harvestWindow = plantData.harvestWindowDaysMax ?? plantData.harvestWindowDays;
 
-	// For cut-and-come-again flowers, we can space plantings further apart
-	let baseInterval: number;
-	if (flowerData.cutAndComeAgain) {
-		// These keep producing, so space them out more
-		baseInterval = Math.max(vaseLife * 2, 21); // At least 3 weeks
-	} else {
-		// Single harvest crops need tighter succession
-		baseInterval = vaseLife;
-	}
+	// Continuous: 40% overlap between plantings. Staggered: no overlap.
+	const multiplier = desiredCoverage === 'continuous' ? 0.6 : 1.0;
+	const baseInterval = Math.max(7, Math.min(Math.round(harvestWindow * multiplier), 60));
 
-	// For staggered harvests, double the interval
-	if (desiredCoverage === 'staggered') {
-		baseInterval = baseInterval * 2;
-	}
-
-	// Calculate number of plantings that fit in the season
-	const growingTime = flowerData.daysToHarvest;
+	const growingTime = plantData.daysToHarvest;
 	const effectiveSeasonLength = seasonLengthDays - growingTime;
 	const totalPlantings = Math.max(1, Math.floor(effectiveSeasonLength / baseInterval));
 
-	// Build reasoning string
-	let reasoning: string;
-	if (flowerData.cutAndComeAgain) {
-		reasoning = `${flowerData.name} produces continuously, so ${baseInterval}-day intervals maintain steady supply`;
-	} else {
-		reasoning = `${baseInterval}-day intervals match ${flowerData.name}'s ${vaseLife}-day vase life for continuous blooms`;
-	}
+	const reasoning = `${plantData.name} produces for ~${harvestWindow} days — ${baseInterval}-day intervals for ${desiredCoverage} harvest`;
 
 	return {
-		intervalDays: Math.round(baseInterval),
+		intervalDays: baseInterval,
 		totalPlantings,
 		reasoning
 	};
@@ -335,13 +308,13 @@ export function getPlantVisibilityAtDate(
  * Returns a smooth interpolation from 0 to heightMax over the growing period.
  *
  * @param plantingDates - The plant's scheduled dates
- * @param flowerData - Flower data including growth timing and max height
+ * @param plantData - Flower data including growth timing and max height
  * @param currentDate - The date to calculate height for
  * @returns Current height in inches (0 if not yet growing, heightMax if fully mature)
  */
 export function getPlantHeightAtDate(
 	plantingDates: PlantingDates,
-	flowerData: FlowerData,
+	plantData: PlantData,
 	currentDate: Date
 ): number {
 	const transplant = parseDate(plantingDates.transplantDate);
@@ -350,19 +323,19 @@ export function getPlantHeightAtDate(
 	// Determine when outdoor growth begins
 	// For transplants: growth starts at transplant date
 	// For direct sow: growth starts after germination
-	const germinationDays = flowerData.daysToGerminationMax ?? flowerData.daysToGermination;
+	const germinationDays = plantData.daysToGerminationMax ?? plantData.daysToGermination;
 	const growthStart = transplant ?? (directSow ? addDays(directSow, germinationDays) : null);
 
 	if (!growthStart) {
 		// No planting dates - return max height as fallback
-		return flowerData.heightMax;
+		return plantData.heightMax;
 	}
 
 	// Growth ends at harvest start (daysToHarvest after transplant/sow)
 	const outdoorStart = transplant || directSow;
-	if (!outdoorStart) return flowerData.heightMax;
+	if (!outdoorStart) return plantData.heightMax;
 
-	const growthEnd = addDays(outdoorStart, flowerData.daysToHarvest);
+	const growthEnd = addDays(outdoorStart, plantData.daysToHarvest);
 
 	// Before growth starts - height is 0
 	if (currentDate < growthStart) {
@@ -371,7 +344,7 @@ export function getPlantHeightAtDate(
 
 	// After growth ends - plant is at full height
 	if (currentDate >= growthEnd) {
-		return flowerData.heightMax;
+		return plantData.heightMax;
 	}
 
 	// During growth - smooth linear interpolation from 0 to max
@@ -379,7 +352,7 @@ export function getPlantHeightAtDate(
 	const elapsedMs = currentDate.getTime() - growthStart.getTime();
 	const progress = totalGrowthMs > 0 ? elapsedMs / totalGrowthMs : 1;
 
-	return flowerData.heightMax * Math.min(1, Math.max(0, progress));
+	return plantData.heightMax * Math.min(1, Math.max(0, progress));
 }
 
 /**

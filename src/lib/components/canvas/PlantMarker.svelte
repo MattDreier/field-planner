@@ -1,7 +1,7 @@
 <script lang="ts">
 	import SpacingCircle from './SpacingCircle.svelte';
 	import type { PlacedPlant, PlannedPlant } from '$lib/types';
-	import type { FlowerData } from '$lib/data/flowers';
+	import type { PlantData } from '$lib/data/plants';
 	import type { LifecyclePhase } from '$lib/utils/timeline';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -13,7 +13,7 @@
 	}
 
 	// Union type for both placed and planned plants
-	type PlantData = PlacedPlant | (PlannedPlant & { flowerData: FlowerData });
+	type PlantData = PlacedPlant | (PlannedPlant & { flowerData: PlantData });
 
 	interface Props {
 		plant: PlantData;
@@ -27,13 +27,14 @@
 		selectedPlantIds: Set<Id<'placedPlants'> | Id<'plannedPlants'>>; // All selected plants for multi-drag
 		phaseInfo?: PhaseInfo; // Current lifecycle phase info
 		successionIndex?: number; // For planned plants - shows #N badge
+		dataTour?: string; // Tour step targeting
 		onSelect: (id: Id<'placedPlants'> | Id<'plannedPlants'>, shiftKey?: boolean) => void;
 		onMove?: (id: Id<'placedPlants'> | Id<'plannedPlants'>, deltaX: number, deltaY: number, allSelectedIds?: Set<Id<'placedPlants'> | Id<'plannedPlants'>>, disableSnap?: boolean) => void;
 		onMoveStart?: () => void; // Called once when drag begins (for history snapshot)
 		onMoveEnd?: () => void; // Called when drag ends (for clearing guides)
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, successionIndex, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
+	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, successionIndex, dataTour, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
 
 	// Plant marker size (visual representation)
 	const markerRadius = 8;
@@ -117,7 +118,7 @@
 	}
 </script>
 
-<g class="plant-marker" style="outline: none;" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id, e.shiftKey)}>
+<g class="plant-marker" style="outline: none;" role="button" tabindex="0" data-tour={dataTour} onkeydown={(e) => e.key === 'Enter' && onSelect(plant._id, e.shiftKey)}>
 	<!-- Spacing circle - color coded by height (grey when shaded) -->
 	<SpacingCircle
 		{cx}

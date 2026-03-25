@@ -1,19 +1,16 @@
 <script lang="ts">
 	import { ChevronUp, ChevronDown, Calendar, Plus } from 'lucide-svelte';
-	import { Button } from '$lib/components/ui/button';
 	import TimelineGantt from './TimelineGantt.svelte';
 	import TimelineLegend from './TimelineLegend.svelte';
 	import {
 		timelineState,
-		togglePanel,
 		setHardinessZone,
 		setViewScale,
 		initializeGardenSettings
 	} from '$lib/stores/timeline.svelte';
 	import { ZONE_OPTIONS, formatZone } from '$lib/data/hardinessZones';
 	import type { Bed, PlacedPlant, GardenSettings, PlantingDates } from '$lib/types';
-	import type { FlowerData } from '$lib/data/flowers';
-	import { FLOWER_DATABASE } from '$lib/data/flowers';
+	import { PLANT_DATABASE, type PlantData } from '$lib/data/plants';
 	import { calculateLifecyclePhases, type TimelineEntry } from '$lib/utils/timeline';
 
 	interface Props {
@@ -22,20 +19,134 @@
 		gardenSettings: GardenSettings;
 		onOpenSuccessionPlanner?: () => void;
 		onUpdatePlantDates?: (plantId: string, dates: PlantingDates) => void;
+		onScrubberRelease?: () => void;
 	}
 
-	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates }: Props = $props();
+	let { beds, plants, gardenSettings, onOpenSuccessionPlanner, onUpdatePlantDates, onScrubberRelease }: Props = $props();
+
+	// Panel height state (starts closed)
+	let contentHeight = $state(0);
+
+	// Track parent container height for max constraint
+	let containerElement: HTMLDivElement | null = $state(null);
+	let parentHeight = $state(600);
+
+	// Update parent height on mount and resize
+	$effect(() => {
+		if (!containerElement?.parentElement) return;
+
+		const updateParentHeight = () => {
+			if (containerElement?.parentElement) {
+				parentHeight = containerElement.parentElement.clientHeight;
+			}
+		};
+
+		updateParentHeight();
+
+		const resizeObserver = new ResizeObserver(updateParentHeight);
+		resizeObserver.observe(containerElement.parentElement);
+
+		return () => resizeObserver.disconnect();
+	});
+
+	// Max height is middle of canvas (50% of parent minus header)
+	const maxHeight = $derived(Math.max(200, (parentHeight - 48) / 2));
+
+	// Derived states
+	const isOpen = $derived(contentHeight > 0);
+
+	// Sync local isOpen state to the store (for tour completion detection)
+	$effect(() => {
+		timelineState.isPanelOpen = isOpen;
+	});
+
+	// Default open height (used when toggling open)
+	const defaultOpenHeight = $derived(Math.min(300, maxHeight));
+
+	// Toggle panel open/closed
+	function togglePanel() {
+		contentHeight = isOpen ? 0 : defaultOpenHeight;
+	}
+
+	// Drag state
+	let isDragging = $state(false);
+	let hasDragged = $state(false); // Track if actual movement occurred
+	let dragStartY = $state(0);
+	let dragStartHeight = $state(0);
+
+	function handleMouseDown(e: MouseEvent) {
+		isDragging = true;
+		hasDragged = false;
+		dragStartY = e.clientY;
+		dragStartHeight = contentHeight;
+		document.addEventListener('mousemove', handleMouseMove);
+		document.addEventListener('mouseup', handleMouseUp);
+	}
+
+	function handleMouseMove(e: MouseEvent) {
+		if (!isDragging) return;
+		// Dragging up (negative deltaY) should increase height
+		const deltaY = dragStartY - e.clientY;
+		// Only count as drag if moved more than 3px
+		if (Math.abs(deltaY) > 3) {
+			hasDragged = true;
+		}
+		const newHeight = Math.max(0, Math.min(maxHeight, dragStartHeight + deltaY));
+		contentHeight = newHeight;
+	}
+
+	function handleMouseUp() {
+		// If no drag occurred, treat as click to toggle
+		if (!hasDragged) {
+			togglePanel();
+		}
+		isDragging = false;
+		hasDragged = false;
+		document.removeEventListener('mousemove', handleMouseMove);
+		document.removeEventListener('mouseup', handleMouseUp);
+	}
+
+	// Touch support
+	function handleTouchStart(e: TouchEvent) {
+		if (e.touches.length !== 1) return;
+		isDragging = true;
+		hasDragged = false;
+		dragStartY = e.touches[0].clientY;
+		dragStartHeight = contentHeight;
+		document.addEventListener('touchmove', handleTouchMove);
+		document.addEventListener('touchend', handleTouchEnd);
+	}
+
+	function handleTouchMove(e: TouchEvent) {
+		if (!isDragging || e.touches.length !== 1) return;
+		const deltaY = dragStartY - e.touches[0].clientY;
+		if (Math.abs(deltaY) > 3) {
+			hasDragged = true;
+		}
+		const newHeight = Math.max(0, Math.min(maxHeight, dragStartHeight + deltaY));
+		contentHeight = newHeight;
+	}
+
+	function handleTouchEnd() {
+		if (!hasDragged) {
+			togglePanel();
+		}
+		isDragging = false;
+		hasDragged = false;
+		document.removeEventListener('touchmove', handleTouchMove);
+		document.removeEventListener('touchend', handleTouchEnd);
+	}
 
 	// Initialize frost dates on first render
 	$effect(() => {
 		initializeGardenSettings();
 	});
 
-	// Build flower lookup map
-	const flowerMap = $derived.by(() => {
-		const map = new Map<string, FlowerData>();
-		for (const flower of FLOWER_DATABASE) {
-			map.set(flower.id, flower);
+	// Build plant lookup map
+	const plantMap = $derived.by(() => {
+		const map = new Map<string, PlantData>();
+		for (const plant of PLANT_DATABASE) {
+			map.set(plant.id, plant);
 		}
 		return map;
 	});
@@ -57,7 +168,7 @@
 		for (const plant of plants) {
 			if (!plant.plantingDates) continue;
 
-			const flower = flowerMap.get(plant.flowerId);
+			const flower = plantMap.get(plant.flowerId);
 			if (!flower) continue;
 
 			const phases = calculateLifecyclePhases(plant.plantingDates, flower);
@@ -79,7 +190,7 @@
 
 		// Add planned plants
 		for (const plant of timelineState.plannedPlants) {
-			const flower = flowerMap.get(plant.flowerId);
+			const flower = plantMap.get(plant.flowerId);
 			if (!flower) continue;
 
 			const phases = calculateLifecyclePhases(plant.plantingDates, flower);
@@ -133,21 +244,36 @@
 </script>
 
 <!-- Timeline Panel - positioned at bottom of canvas area -->
-<div
-	class="absolute bottom-0 left-0 right-0 z-20 transition-transform duration-300 ease-in-out"
-	class:translate-y-[calc(100%-48px)]={!timelineState.isPanelOpen}
->
-	<!-- Panel header / collapse handle -->
-	<button
-		type="button"
-		onclick={togglePanel}
-		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 hover:bg-accent/50 transition-colors cursor-pointer"
+<div class="absolute bottom-0 left-0 right-0 z-20" bind:this={containerElement}>
+	<!-- Resize handle - draggable to open/close panel -->
+	<div
+		class="absolute -top-6 left-0 right-0 h-6 flex items-center justify-center select-none cursor-ns-resize"
+		role="slider"
+		aria-label="Drag to resize timeline panel"
+		aria-valuemin={0}
+		aria-valuemax={maxHeight}
+		aria-valuenow={contentHeight}
+		tabindex="0"
+		onmousedown={handleMouseDown}
+		ontouchstart={handleTouchStart}
+	>
+		<div class="w-12 h-1.5 rounded-full bg-muted-foreground/50 hover:bg-muted-foreground/70 transition-colors"></div>
+	</div>
+
+	<!-- Panel header - clickable to toggle -->
+	<div
+		class="w-full h-12 bg-card border-t border-x border-border rounded-t-lg flex items-center justify-between px-4 cursor-pointer"
 		data-tour="timeline-toggle"
+		role="button"
+		tabindex="0"
+		aria-expanded={isOpen}
+		aria-label={isOpen ? 'Collapse timeline panel' : 'Expand timeline panel'}
+		onclick={togglePanel}
+		onkeydown={(e) => e.key === 'Enter' && togglePanel()}
 	>
 		<div class="flex items-center gap-3">
 			<Calendar class="h-4 w-4 text-muted-foreground" />
 			<span class="font-medium">Timeline</span>
-			<span class="text-xs text-muted-foreground">(T)</span>
 			{#if timelineEntries.length > 0}
 				<span class="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
 					{timelineEntries.length} {timelineEntries.length === 1 ? 'plant' : 'plants'}
@@ -156,16 +282,14 @@
 		</div>
 
 		<div class="flex items-center gap-3">
-			{#if timelineState.isPanelOpen}
-				<!-- Controls visible when open -->
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<!-- svelte-ignore a11y_click_events_have_key_events -->
+			{#if isOpen}
+				<!-- Controls visible when open - stop propagation to prevent toggle -->
 				<div
 					class="flex items-center gap-2"
-					onclick={(e) => e.stopPropagation()}
-					onkeydown={(e) => e.stopPropagation()}
 					role="group"
 					aria-label="Timeline controls"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
 				>
 					<!-- Zone selector -->
 					<select
@@ -192,26 +316,29 @@
 
 					<!-- Add succession button -->
 					{#if onOpenSuccessionPlanner}
-						<Button variant="outline" size="sm" class="h-8 text-xs border-border" onclick={onOpenSuccessionPlanner}>
-							<Plus class="h-3 w-3 mr-1" />
+						<button
+							class="h-8 px-3 text-xs bg-background border border-border rounded-md hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring flex items-center gap-1"
+							onclick={onOpenSuccessionPlanner}
+						>
+							<Plus class="h-3 w-3" />
 							Succession
-						</Button>
+						</button>
 					{/if}
 				</div>
 			{/if}
 
-			{#if timelineState.isPanelOpen}
+			{#if isOpen}
 				<ChevronDown class="h-4 w-4 text-muted-foreground" />
 			{:else}
 				<ChevronUp class="h-4 w-4 text-muted-foreground" />
 			{/if}
 		</div>
-	</button>
+	</div>
 
-	<!-- Panel content -->
+	<!-- Panel content - height controlled by contentHeight, animated when not dragging -->
 	<div
 		class="bg-card border-x border-b border-border overflow-hidden"
-		style="height: {timelineState.panelHeight}px"
+		style="height: {contentHeight}px;{isDragging ? '' : ' transition: height 0.25s cubic-bezier(0.22, 1, 0.36, 1);'}"
 	>
 		{#if timelineEntries.length === 0}
 			<!-- Empty state -->
@@ -234,6 +361,7 @@
 						viewYear={timelineState.viewYear}
 						viewScale={timelineState.viewScale}
 						{onUpdatePlantDates}
+						{onScrubberRelease}
 						{tourMarkerDates}
 					/>
 				</div>

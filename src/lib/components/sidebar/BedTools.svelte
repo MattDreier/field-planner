@@ -2,7 +2,7 @@
 	import { ToggleGroup } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, Bed, SunSimulationState } from '$lib/types';
-	import { MousePointer2, Square, Circle, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
+	import { MousePointer2, Square, Circle, Fence, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
 	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
 	import { setLatitude } from '$lib/stores/timeline.svelte';
 
@@ -10,6 +10,11 @@
 		widthFeet: number;
 		heightFeet: number;
 		rotation: number;
+		raisedBedHeightFeet?: number;
+	}
+
+	interface FenceDefaults {
+		heightFeet: number;
 	}
 
 	interface Props {
@@ -18,14 +23,17 @@
 		selectedBed: Bed | null;
 		sunSimulation: SunSimulationState;
 		bedDefaults: BedDefaults;
+		fenceDefaults?: FenceDefaults;
 		snapEnabled?: boolean;
 		snapTemporarilyDisabled?: boolean; // True when Alt/Option is held during drag
 		onToolChange: (tool: Tool) => void;
 		onDelete: () => void;
 		onResizeBed: (id: string, widthFeet: number, heightFeet?: number) => void;
 		onRotateBed?: (id: string, rotation: number) => void;
+		onUpdateBedRaisedHeight?: (id: string, raisedBedHeightFeet: number) => void;
 		onUpdateSunSimulation: (state: Partial<SunSimulationState>) => void;
 		onUpdateBedDefaults: (defaults: Partial<BedDefaults>) => void;
+		onUpdateFenceDefaults?: (defaults: Partial<FenceDefaults>) => void;
 		onToggleSnap?: () => void;
 		onTimeSliderRelease?: () => void;
 	}
@@ -36,14 +44,17 @@
 		selectedBed,
 		sunSimulation,
 		bedDefaults,
+		fenceDefaults = { heightFeet: 6 },
 		snapEnabled = true,
 		snapTemporarilyDisabled = false,
 		onToolChange,
 		onDelete,
 		onResizeBed,
 		onRotateBed,
+		onUpdateBedRaisedHeight,
 		onUpdateSunSimulation,
 		onUpdateBedDefaults,
+		onUpdateFenceDefaults,
 		onToggleSnap,
 		onTimeSliderRelease
 	}: Props = $props();
@@ -60,11 +71,13 @@
 	let widthInput = $state('');
 	let heightInput = $state('');
 	let rotationInput = $state('');
+	let raisedHeightInput = $state('');
 
 	// Default bed inputs (for new beds)
 	let defaultWidthInput = $state('');
 	let defaultHeightInput = $state('');
 	let defaultRotationInput = $state('');
+	let defaultRaisedHeightInput = $state('');
 
 	// Sun simulation state
 	let isRequestingLocation = $state(false);
@@ -81,6 +94,7 @@
 			widthInput = selectedBed.widthFeet.toFixed(2);
 			heightInput = selectedBed.shape === 'rectangle' ? selectedBed.heightFeet.toFixed(2) : '';
 			rotationInput = (selectedBed.rotation ?? 0).toFixed(0);
+			raisedHeightInput = (selectedBed.raisedBedHeightFeet ?? 0).toFixed(1);
 		}
 	});
 
@@ -89,6 +103,7 @@
 		defaultWidthInput = bedDefaults.widthFeet.toFixed(2);
 		defaultHeightInput = bedDefaults.heightFeet.toFixed(2);
 		defaultRotationInput = bedDefaults.rotation.toFixed(0);
+		defaultRaisedHeightInput = (bedDefaults.raisedBedHeightFeet ?? 0).toFixed(1);
 	});
 
 	// Handlers for default bed settings
@@ -114,6 +129,30 @@
 		if (!isNaN(value)) {
 			const normalizedValue = ((value % 360) + 360) % 360;
 			onUpdateBedDefaults({ rotation: normalizedValue });
+		}
+	}
+
+	function handleDefaultRaisedHeightChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0 && value <= 4) {
+			onUpdateBedDefaults({ raisedBedHeightFeet: value });
+		}
+	}
+
+	// Fence height input
+	let fenceHeightInput = $state('');
+
+	// Sync fence height input with defaults
+	$effect(() => {
+		fenceHeightInput = fenceDefaults.heightFeet.toFixed(0);
+	});
+
+	function handleFenceHeightChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 1 && value <= 12 && onUpdateFenceDefaults) {
+			onUpdateFenceDefaults({ heightFeet: value });
 		}
 	}
 
@@ -154,6 +193,14 @@
 		if (!isNaN(value) && selectedBed && onRotateBed) {
 			const normalizedValue = ((value % 360) + 360) % 360;
 			onRotateBed(selectedBed._id, normalizedValue);
+		}
+	}
+
+	function handleRaisedHeightChange(e: Event) {
+		const target = e.target as HTMLInputElement;
+		const value = parseFloat(target.value);
+		if (!isNaN(value) && value >= 0 && value <= 4 && selectedBed && onUpdateBedRaisedHeight) {
+			onUpdateBedRaisedHeight(selectedBed._id, value);
 		}
 	}
 
@@ -251,6 +298,15 @@
 				>
 					<Circle class="w-4 h-4" />
 				</ToggleGroup.Item>
+
+				<ToggleGroup.Item
+					value="fence"
+					title="Fence Tool (F)"
+					class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
+					data-tour="fence-tool"
+				>
+					<Fence class="w-4 h-4" />
+				</ToggleGroup.Item>
 			</span>
 
 			<ToggleGroup.Item
@@ -345,6 +401,26 @@
 						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
 					/>
 				</div>
+
+				<div>
+					<label for="default-raised-height" class="block text-xs text-muted-foreground mb-1">
+						Raised Height (ft)
+					</label>
+					<input
+						id="default-raised-height"
+						type="number"
+						min="0"
+						max="4"
+						step="0.5"
+						placeholder="0 (ground level)"
+						bind:value={defaultRaisedHeightInput}
+						onchange={handleDefaultRaisedHeightChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+					<p class="text-[10px] text-muted-foreground mt-1">
+						Height of bed walls (casts shadows)
+					</p>
+				</div>
 			</div>
 
 			<div class="mt-4 pt-4 border-t border-border space-y-3">
@@ -420,6 +496,69 @@
 						onchange={handleRotationChange}
 						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
 					/>
+				</div>
+
+				<div>
+					<label for="bed-raised-height" class="block text-xs text-muted-foreground mb-1">
+						Raised Height (ft)
+					</label>
+					<input
+						id="bed-raised-height"
+						type="number"
+						min="0"
+						max="4"
+						step="0.5"
+						placeholder="0 (ground level)"
+						bind:value={raisedHeightInput}
+						onchange={handleRaisedHeightChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+					<p class="text-[10px] text-muted-foreground mt-1">
+						Height of bed walls (casts shadows)
+					</p>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Fence Settings (when fence tool active) -->
+	{#if currentTool === 'fence'}
+		<div class="mt-4 pt-4 border-t border-border flex-1">
+			<h4 class="font-medium text-sm mb-3">Fence Tool</h4>
+
+			<div class="space-y-3">
+				<div>
+					<label for="fence-height" class="block text-xs text-muted-foreground mb-1">
+						Height (ft)
+					</label>
+					<input
+						id="fence-height"
+						type="number"
+						min="1"
+						max="12"
+						step="1"
+						bind:value={fenceHeightInput}
+						onchange={handleFenceHeightChange}
+						class="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
+					/>
+				</div>
+			</div>
+
+			<div class="mt-4 pt-4 border-t border-border space-y-3">
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">How to draw:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li><strong>Click</strong> to add fence vertices</li>
+						<li><strong>Double-click</strong> or press <kbd class="px-1 py-0.5 bg-muted rounded text-[10px]">Enter</kbd> to finish</li>
+						<li>Press <kbd class="px-1 py-0.5 bg-muted rounded text-[10px]">Escape</kbd> to cancel</li>
+					</ul>
+				</div>
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">Tips:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li>Fences cast shadows in shadow mode</li>
+						<li>Select a fence to drag vertices</li>
+					</ul>
 				</div>
 			</div>
 		</div>
@@ -529,6 +668,8 @@
 				<p>Click and drag on canvas to create a rectangular bed.</p>
 			{:else if currentTool === 'circle'}
 				<p>Click and drag on canvas to create a circular bed.</p>
+			{:else if currentTool === 'fence'}
+				<p>Click to add vertices. Double-click to finish the fence.</p>
 			{:else if currentTool === 'shadows'}
 				<p>Visualize how shadows fall across your garden throughout the day.</p>
 			{/if}

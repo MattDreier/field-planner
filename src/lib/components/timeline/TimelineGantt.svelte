@@ -18,10 +18,11 @@
 		viewYear: number;
 		viewScale: TimelineViewScale;
 		onUpdatePlantDates?: (plantId: string, dates: PlantingDates) => void;
+		onScrubberRelease?: () => void;
 		tourMarkerDates?: TourMarkerDates | null;
 	}
 
-	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates, tourMarkerDates }: Props = $props();
+	let { entries, beds, gardenSettings, viewYear, viewScale, onUpdatePlantDates, onScrubberRelease, tourMarkerDates }: Props = $props();
 
 	// Scrubber drag state
 	let isDraggingScrubber = $state(false);
@@ -29,6 +30,9 @@
 	// Entry drag state
 	let draggingEntryId = $state<string | null>(null);
 	let dragStartEntryX = $state(0);
+
+	// Row hover state (shared between label and chart panels)
+	let hoveredRowIdx = $state<number | null>(null);
 
 	// Container width tracking for dynamic sizing
 	let containerWidth = $state(800);
@@ -233,7 +237,7 @@
 		return dateToX(currentDate);
 	});
 
-	// Scrubber drag handlers
+	// Scrubber drag handlers - support both mouse and touch
 	function handleScrubberMouseDown(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -242,12 +246,21 @@
 		document.addEventListener('mouseup', handleScrubberMouseUp);
 	}
 
-	function handleScrubberDrag(e: MouseEvent) {
+	function handleScrubberTouchStart(e: TouchEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		isDraggingScrubber = true;
+		document.addEventListener('touchmove', handleScrubberTouchMove, { passive: false });
+		document.addEventListener('touchend', handleScrubberTouchEnd);
+		document.addEventListener('touchcancel', handleScrubberTouchEnd);
+	}
+
+	function updateScrubberPosition(clientX: number) {
 		if (!isDraggingScrubber || !scrollContainer) return;
 
 		const rect = scrollContainer.getBoundingClientRect();
 		const scrollLeft = scrollContainer.scrollLeft;
-		const x = e.clientX - rect.left + scrollLeft;
+		const x = clientX - rect.left + scrollLeft;
 
 		// Clamp to valid range
 		const clampedX = Math.max(0, Math.min(chartWidth, x));
@@ -258,13 +271,33 @@
 		setCurrentViewDate(newDate, viewScale === 'season');
 	}
 
+	function handleScrubberDrag(e: MouseEvent) {
+		updateScrubberPosition(e.clientX);
+	}
+
+	function handleScrubberTouchMove(e: TouchEvent) {
+		e.preventDefault(); // Prevent scrolling while dragging
+		if (e.touches.length > 0) {
+			updateScrubberPosition(e.touches[0].clientX);
+		}
+	}
+
 	function handleScrubberMouseUp() {
 		isDraggingScrubber = false;
 		document.removeEventListener('mousemove', handleScrubberDrag);
 		document.removeEventListener('mouseup', handleScrubberMouseUp);
+		onScrubberRelease?.();
 	}
 
-	// Entry drag handlers
+	function handleScrubberTouchEnd() {
+		isDraggingScrubber = false;
+		document.removeEventListener('touchmove', handleScrubberTouchMove);
+		document.removeEventListener('touchend', handleScrubberTouchEnd);
+		document.removeEventListener('touchcancel', handleScrubberTouchEnd);
+		onScrubberRelease?.();
+	}
+
+	// Entry drag handlers - support both mouse and touch
 	function handleEntryMouseDown(e: MouseEvent, entry: TimelineEntry) {
 		if (entry.type !== 'placed' || !onUpdatePlantDates) return;
 
@@ -276,13 +309,25 @@
 		document.addEventListener('mouseup', handleEntryMouseUp);
 	}
 
-	function handleEntryDrag(e: MouseEvent) {
+	function handleEntryTouchStart(e: TouchEvent, entry: TimelineEntry) {
+		if (entry.type !== 'placed' || !onUpdatePlantDates) return;
+
+		e.preventDefault();
+		e.stopPropagation();
+		draggingEntryId = entry.id;
+		dragStartEntryX = e.touches[0].clientX;
+		document.addEventListener('touchmove', handleEntryTouchMove, { passive: false });
+		document.addEventListener('touchend', handleEntryTouchEnd);
+		document.addEventListener('touchcancel', handleEntryTouchEnd);
+	}
+
+	function updateEntryPosition(clientX: number) {
 		if (!draggingEntryId || !scrollContainer || !onUpdatePlantDates) return;
 
 		const entry = entries.find((en) => en.id === draggingEntryId);
 		if (!entry || entry.type !== 'placed') return;
 
-		const deltaX = e.clientX - dragStartEntryX;
+		const deltaX = clientX - dragStartEntryX;
 		const deltaDays = Math.round(deltaX / dayWidth);
 
 		if (deltaDays === 0) return;
@@ -309,16 +354,34 @@
 		}
 
 		// Update the start position for smooth dragging
-		dragStartEntryX = e.clientX;
+		dragStartEntryX = clientX;
 
 		// Call the update handler
 		onUpdatePlantDates(draggingEntryId, newDates);
+	}
+
+	function handleEntryDrag(e: MouseEvent) {
+		updateEntryPosition(e.clientX);
+	}
+
+	function handleEntryTouchMove(e: TouchEvent) {
+		e.preventDefault(); // Prevent scrolling while dragging
+		if (e.touches.length > 0) {
+			updateEntryPosition(e.touches[0].clientX);
+		}
 	}
 
 	function handleEntryMouseUp() {
 		draggingEntryId = null;
 		document.removeEventListener('mousemove', handleEntryDrag);
 		document.removeEventListener('mouseup', handleEntryMouseUp);
+	}
+
+	function handleEntryTouchEnd() {
+		draggingEntryId = null;
+		document.removeEventListener('touchmove', handleEntryTouchMove);
+		document.removeEventListener('touchend', handleEntryTouchEnd);
+		document.removeEventListener('touchcancel', handleEntryTouchEnd);
 	}
 
 	// Build flat list of rows with their Y positions
@@ -360,6 +423,8 @@
 
 	// Scroll container reference for horizontal scrolling
 	let scrollContainer: HTMLDivElement;
+	let labelScrollContainer: HTMLDivElement;
+	let isSyncingScroll = false;
 
 	// Track container width for dynamic month view sizing
 	$effect(() => {
@@ -375,17 +440,32 @@
 		return () => resizeObserver.disconnect();
 	});
 
-	// Season view: handle infinite scroll by updating viewYear when scrolling far right
-	function handleScroll(e: Event) {
-		if (viewScale !== 'season') return;
-
+	// Sync vertical scroll between chart and label panels
+	function handleChartScroll(e: Event) {
 		const target = e.target as HTMLDivElement;
-		const scrollRight = target.scrollWidth - target.scrollLeft - target.clientWidth;
 
-		// When user scrolls near the right edge, load more years
+		// Sync left labels vertical position
+		if (!isSyncingScroll && labelScrollContainer) {
+			isSyncingScroll = true;
+			labelScrollContainer.scrollTop = target.scrollTop;
+			isSyncingScroll = false;
+		}
+
+		// Season view: infinite scroll by updating viewYear when scrolling far right
+		if (viewScale !== 'season') return;
+		const scrollRight = target.scrollWidth - target.scrollLeft - target.clientWidth;
 		if (scrollRight < 500 && target.scrollLeft > 100) {
 			// Could extend the range here - for now we just have 5 years
 		}
+	}
+
+	function handleLabelScroll() {
+		if (isSyncingScroll) return;
+		isSyncingScroll = true;
+		if (scrollContainer) {
+			scrollContainer.scrollTop = labelScrollContainer.scrollTop;
+		}
+		isSyncingScroll = false;
 	}
 </script>
 
@@ -400,8 +480,13 @@
 			<span class="text-xs font-medium text-muted-foreground">Plant / Bed</span>
 		</div>
 
-		<!-- Labels -->
-		<div class="overflow-y-auto" style="height: calc(100% - 40px)">
+		<!-- Labels (scrollbar hidden, synced with chart vertical scroll) -->
+		<div
+			class="overflow-y-auto hide-scrollbar"
+			style="height: calc(100% - 40px)"
+			bind:this={labelScrollContainer}
+			onscroll={handleLabelScroll}
+		>
 			{#each rowData as row, i}
 				{#if row.type === 'bed-header'}
 					<div
@@ -414,8 +499,11 @@
 				{:else if row.entry}
 					<div
 						class="flex items-center px-3 pl-5 text-sm truncate"
+						class:row-highlight={hoveredRowIdx === i}
 						style="height: {ROW_HEIGHT}px"
 						title={row.entry.flowerName}
+						onmouseenter={() => hoveredRowIdx = i}
+						onmouseleave={() => hoveredRowIdx = null}
 					>
 						<span class="truncate">
 							{row.entry.flowerName}
@@ -436,7 +524,7 @@
 		class="flex-1 overflow-x-auto overflow-y-auto"
 		class:overflow-x-hidden={viewScale === 'month'}
 		bind:this={scrollContainer}
-		onscroll={handleScroll}
+		onscroll={handleChartScroll}
 		data-tour="timeline-chart"
 	>
 		<svg
@@ -680,14 +768,17 @@
 							y={row.y}
 							width={chartWidth}
 							height={ROW_HEIGHT}
-							fill="transparent"
-							class="hover:fill-accent/30"
+							class="row-highlight-rect"
+							class:active={hoveredRowIdx === rowIdx}
+							onmouseenter={() => hoveredRowIdx = rowIdx}
+							onmouseleave={() => hoveredRowIdx = null}
 						/>
 
 						<!-- Phase bars (draggable group for placed plants) -->
 						<g
-							class={row.entry.type === 'placed' && onUpdatePlantDates ? 'cursor-grab active:cursor-grabbing' : ''}
+							class={row.entry.type === 'placed' && onUpdatePlantDates ? 'cursor-grab active:cursor-grabbing touch-none' : ''}
 							onmousedown={(e) => handleEntryMouseDown(e, row.entry!)}
+							ontouchstart={(e) => handleEntryTouchStart(e, row.entry!)}
 							style={draggingEntryId === row.entry.id ? 'opacity: 0.7;' : ''}
 						>
 							{#each row.entry.phases as phase}
@@ -728,12 +819,13 @@
 
 				<!-- Draggable handle at top -->
 				<g
-					class="cursor-ew-resize"
+					class="cursor-ew-resize touch-none"
 					role="slider"
 					tabindex="0"
 					aria-label="Timeline scrubber - drag to change current view date"
 					aria-valuenow={new Date(timelineState.currentViewDate).getTime()}
 					onmousedown={handleScrubberMouseDown}
+					ontouchstart={handleScrubberTouchStart}
 				>
 					<!-- Handle background -->
 					<rect
@@ -818,3 +910,21 @@
 		</svg>
 	</div>
 </div>
+
+<style>
+	.hide-scrollbar {
+		scrollbar-width: none;
+	}
+	.hide-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+	.row-highlight {
+		background: color-mix(in oklch, var(--color-accent) 30%, transparent);
+	}
+	.row-highlight-rect {
+		fill: transparent;
+	}
+	.row-highlight-rect.active {
+		fill: color-mix(in oklch, var(--color-accent) 30%, transparent);
+	}
+</style>

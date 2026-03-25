@@ -27,6 +27,7 @@ export interface BedBase {
 	name?: string;
 	fillColor?: string;
 	rotation?: number; // degrees (0-360), clockwise from North
+	raisedBedHeightFeet?: number; // height of raised bed walls (0 = ground level, default)
 	createdAt: number;
 }
 
@@ -41,6 +42,23 @@ export interface CircularBed extends BedBase {
 }
 
 export type Bed = RectangularBed | CircularBed;
+
+// Fence vertex
+export interface FenceVertex {
+	x: number; // field inches
+	y: number;
+}
+
+// Fence interface
+export interface Fence {
+	_id: Id<'fences'>;
+	layoutId: Id<'layouts'>;
+	vertices: FenceVertex[]; // minimum 2 points
+	heightFeet: number;
+	name?: string;
+	color?: string;
+	createdAt: number;
+}
 
 // Timeline planting dates
 export interface PlantingDates {
@@ -131,7 +149,7 @@ export interface CanvasState {
 }
 
 // Active tool
-export type Tool = 'select' | 'rectangle' | 'circle' | 'shadows';
+export type Tool = 'select' | 'rectangle' | 'circle' | 'fence' | 'shadows';
 
 // Drag source for drag-and-drop
 export type DragSource =

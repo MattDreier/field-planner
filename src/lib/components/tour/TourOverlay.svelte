@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { tourState, getCurrentStep, skipTour, TOUR_STEPS } from '$lib/stores/tour.svelte';
+	import { tourState, getCurrentStep, skipTour, canGoBack, canGoForward, TOUR_STEPS } from '$lib/stores/tour.svelte';
 	import TourTooltip from './TourTooltip.svelte';
 
 	// Spotlight rects (what gets highlighted) - supports multiple spotlights
@@ -184,7 +184,10 @@
 					placement={currentStep.placement}
 					targetRect={tooltipRect}
 					offsetY={currentStep.offsetY}
+					autoAdvanceMs={currentStep.autoAdvanceMs}
 					{isFinalStep}
+					canGoBack={canGoBack()}
+					canGoForward={canGoForward()}
 				/>
 			</div>
 		{/if}

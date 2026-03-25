@@ -54,16 +54,16 @@ export default defineSchema({
 		layoutId: v.id('layouts'), // denormalized for efficient queries
 
 		// Reference to flower database
-		flowerId: v.string(), // matches FlowerData.id from flowers.ts
+		flowerId: v.string(), // matches PlantData.id from plants.ts
 
 		// Position within bed (in inches, relative to bed origin)
 		x: v.number(),
 		y: v.number(),
 
-		// Cached values from flower database (for display without re-lookup)
+		// Cached values from plant database (for display without re-lookup)
 		spacingMin: v.number(), // inches
 		heightMax: v.number(), // inches
-		name: v.string(), // flower name
+		name: v.string(), // plant name
 
 		// Timeline scheduling (flattened)
 		indoorStartDate: v.optional(v.string()),
