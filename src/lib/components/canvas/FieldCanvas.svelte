@@ -6,7 +6,8 @@
 	import ShadowLayer from './ShadowLayer.svelte';
 	import SmartGuides from './SmartGuides.svelte';
 	import SelectionDistance from './SelectionDistance.svelte';
-	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, FenceVertex, Tool, DragSource, SunSimulationState } from '$lib/types';
+	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, FenceVertex, Tool, SunSimulationState } from '$lib/types';
+	import { plantDragState } from '$lib/stores/plantDrag.svelte';
 	import { getBedDimensionsInInches } from '$lib/types';
 	import { fieldToCanvas, canvasToField, bedLocalToField, fieldToBedLocal, isInsideBed } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
@@ -57,7 +58,6 @@
 		selectedBedIds: Set<Id<'beds'>>;
 		selectedPlantIds: Set<Id<'placedPlants'>>;
 		selectedFenceIds?: Set<Id<'fences'>>;
-		dragSource: DragSource;
 		sunSimulation: SunSimulationState;
 		bedDefaults?: BedDefaults;
 		fenceDefaults?: FenceDefaults;
@@ -93,7 +93,6 @@
 		selectedBedIds,
 		selectedPlantIds,
 		selectedFenceIds = new Set(),
-		dragSource,
 		sunSimulation,
 		bedDefaults = { widthFeet: 4, heightFeet: 8, rotation: 0, raisedBedHeightFeet: 0 },
 		fenceDefaults = { heightFeet: 6 },
@@ -704,42 +703,34 @@
 		}
 	}
 
-	// Handle drop on canvas
-	function handleDrop(e: DragEvent) {
-		e.preventDefault();
-		if (!dragSource || dragSource.type !== 'flower') return;
+	// Handle pointer-based drop from plant palette (replaces HTML5 drag-and-drop for touch support)
+	// Exported so parent can call on window pointerup. Reads plant info from shared store.
+	export function tryDropAtPoint(clientX: number, clientY: number): boolean {
+		if (!svgElement || !plantDragState.isDragging || !plantDragState.plant) return false;
 
-		const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
-		const canvasX = e.clientX - rect.left;
-		const canvasY = e.clientY - rect.top;
+		const rect = svgElement.getBoundingClientRect();
+		if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+			return false;
+		}
+
+		const { flowerId, flowerName, spacingMin, heightMax } = plantDragState.plant;
+
+		const canvasX = clientX - rect.left;
+		const canvasY = clientY - rect.top;
 		const fieldPos = canvasToField(canvasX, canvasY, canvasState);
 
-		// Find which bed the drop is in (rotation-aware hit detection)
 		for (const bed of beds) {
-			// Inverse-rotate point for hit detection against axis-aligned bounds
 			const localForHitTest = fieldToBedLocal(fieldPos.x, fieldPos.y, bed);
 
 			if (isInsideBed(localForHitTest.x, localForHitTest.y, bed)) {
-				// Store simple offset as local coords (rendering uses bed.x + plant.x, no rotation)
 				const localX = fieldPos.x - bed.x;
 				const localY = fieldPos.y - bed.y;
 
-				onPlacePlant(
-					bed._id,
-					dragSource.flowerId,
-					dragSource.flowerName,
-					localX,
-					localY,
-					dragSource.spacingMin,
-					dragSource.heightMax
-				);
-				return;
+				onPlacePlant(bed._id, flowerId, flowerName, localX, localY, spacingMin, heightMax);
+				return true;
 			}
 		}
-	}
-
-	function handleDragOver(e: DragEvent) {
-		e.preventDefault();
+		return false;
 	}
 
 	// Double-click to finish fence
@@ -1014,8 +1005,6 @@
 	ondblclick={handleDblClick}
 	onkeydown={handleKeyDown}
 	onwheel={handleWheel}
-	ondrop={handleDrop}
-	ondragover={handleDragOver}
 	tabindex="0"
 	role="application"
 	aria-label="Garden field planner canvas"

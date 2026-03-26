@@ -1,21 +1,121 @@
 <script lang="ts">
 	import type { PlantData } from '$lib/data/plants';
 	import { formatHeight } from '$lib/utils/color';
+	import { startPlantDrag, plantDragState } from '$lib/stores/plantDrag.svelte';
 
 	interface Props {
 		plant: PlantData;
-		onDragStart: (e: DragEvent) => void;
 		onClick?: () => void;
 	}
 
-	let { plant, onDragStart, onClick }: Props = $props();
+	let { plant, onClick }: Props = $props();
+
+	// Pre-commit drag detection state (before drag is committed to the store)
+	let pending = $state(false);
+	let pointerType = $state<string>('');
+	let holdTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let startX = $state(0);
+	let startY = $state(0);
+	let holdReady = $state(false); // Visual feedback for touch hold
+
+	const MOUSE_DRAG_THRESHOLD = 5;
+	const TOUCH_HOLD_MS = 200;
+	const TOUCH_CANCEL_DISTANCE = 10;
+
+	function handlePointerDown(e: PointerEvent) {
+		if (e.button !== 0 || !e.isPrimary) return;
+		// Don't start a new drag if one is already active
+		if (plantDragState.isDragging) return;
+
+		pending = true;
+		pointerType = e.pointerType;
+		startX = e.clientX;
+		startY = e.clientY;
+		holdReady = false;
+
+		if (e.pointerType === 'mouse') {
+			// Mouse: drag commits on movement (handled in move listener)
+		} else {
+			// Touch/pen: require long-press before drag activates
+			holdTimer = setTimeout(() => {
+				holdReady = true;
+				commitDrag(startX, startY);
+			}, TOUCH_HOLD_MS);
+		}
+	}
+
+	function handlePointerMove(e: PointerEvent) {
+		if (!pending || !e.isPrimary) return;
+		// Once committed, the page-level handlers take over
+		if (plantDragState.isDragging) return;
+
+		const dx = e.clientX - startX;
+		const dy = e.clientY - startY;
+		const distance = Math.sqrt(dx * dx + dy * dy);
+
+		if (pointerType === 'mouse') {
+			if (distance >= MOUSE_DRAG_THRESHOLD) {
+				commitDrag(e.clientX, e.clientY);
+			}
+		} else {
+			// Touch: if finger moves too much before hold completes, cancel (user is scrolling)
+			if (distance >= TOUCH_CANCEL_DISTANCE && !holdReady) {
+				cancelPending();
+			}
+		}
+	}
+
+	function handlePointerUp(e: PointerEvent) {
+		if (!e.isPrimary) return;
+
+		const wasPending = pending;
+		const wasDragging = plantDragState.isDragging;
+		cancelPending();
+
+		// If we never committed a drag, treat as click
+		if (wasPending && !wasDragging && onClick) {
+			onClick();
+		}
+	}
+
+	function commitDrag(clientX: number, clientY: number) {
+		pending = false;
+		clearHoldTimer();
+		startPlantDrag(
+			{
+				flowerId: plant.id,
+				flowerName: plant.name,
+				spacingMin: plant.spacingMin,
+				heightMax: plant.heightMax
+			},
+			clientX,
+			clientY
+		);
+	}
+
+	function cancelPending() {
+		pending = false;
+		holdReady = false;
+		clearHoldTimer();
+	}
+
+	function clearHoldTimer() {
+		if (holdTimer) {
+			clearTimeout(holdTimer);
+			holdTimer = null;
+		}
+	}
 </script>
 
+<svelte:window
+	onpointermove={handlePointerMove}
+	onpointerup={handlePointerUp}
+/>
+
 <div
-	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all"
-	draggable="true"
-	ondragstart={onDragStart}
-	onclick={onClick}
+	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all {holdReady ? 'scale-[1.02] ring-2 ring-primary/40' : ''}"
+	style="touch-action: pan-y;"
+	onpointerdown={handlePointerDown}
 	onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 	role="button"
 	tabindex="0"

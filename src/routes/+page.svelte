@@ -9,7 +9,9 @@
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, DragSource, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import type { Tool, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import { plantDragState, updatePlantDragPosition, endPlantDrag } from '$lib/stores/plantDrag.svelte';
+	import DragGhost from '$lib/components/ui/DragGhost.svelte';
 	import type { Id } from '../convex/_generated/dataModel';
 	import { Plus, Undo2, Redo2, HelpCircle } from 'lucide-svelte';
 	import { ModeToggle } from '$lib/components/ui/mode-toggle';
@@ -83,7 +85,7 @@
 	let selectedBedIds = $state<Set<Id<'beds'>>>(new Set());
 	let selectedPlantIds = $state<Set<Id<'placedPlants'>>>(new Set());
 	let viewingPlantId = $state<string | null>(null); // For viewing flower details from palette
-	let dragSource = $state<DragSource>(null);
+	let fieldCanvas: FieldCanvas | undefined = $state();
 	let showSuccessionPlanner = $state(false);
 
 	// Clipboard for copy/paste
@@ -659,13 +661,23 @@
 		);
 	}
 
-	// Drag handlers
-	function handleDragStart(source: DragSource) {
-		dragSource = source;
+	// Pointer-based plant drag (replaces HTML5 drag-and-drop for touch support)
+	function handleWindowPointerMove(e: PointerEvent) {
+		if (plantDragState.isDragging) {
+			updatePlantDragPosition(e.clientX, e.clientY);
+		}
 	}
 
-	function handleDragEnd() {
-		dragSource = null;
+	function handleWindowPointerUp(e: PointerEvent) {
+		if (!plantDragState.isDragging) return;
+
+		// Try to drop on the canvas
+		if (fieldCanvas) {
+			fieldCanvas.tryDropAtPoint(e.clientX, e.clientY);
+		}
+
+		// Always end drag (even if drop missed a bed)
+		endPlantDrag();
 	}
 
 	// Copy/Paste/Select All handlers
@@ -842,17 +854,26 @@
 	}
 
 	// Layout persistence handlers
-	async function handleSaveLayout(name: string): Promise<void> {
+	async function handleSaveLayout(name: string, existingLayoutId?: string): Promise<void> {
 		if (!client) return;
 		isSaving = true;
 		try {
-			// Create the layout
-			const layoutId = await client.mutation(api.layouts.create, {
-				name,
-				canvasWidth: 240 * 12,
-				canvasHeight: 180 * 12,
-				pixelsPerInch: 12
-			});
+			let layoutId: Id<'layouts'>;
+
+			if (existingLayoutId) {
+				// Update existing layout
+				layoutId = existingLayoutId as Id<'layouts'>;
+				await client.mutation(api.layouts.update, { id: layoutId, name });
+				await client.mutation(api.layouts.clearContents, { id: layoutId });
+			} else {
+				// Create new layout
+				layoutId = await client.mutation(api.layouts.create, {
+					name,
+					canvasWidth: 240 * 12,
+					canvasHeight: 180 * 12,
+					pixelsPerInch: 12
+				}) as Id<'layouts'>;
+			}
 
 			// Map old bed IDs to new Convex IDs
 			const bedIdMap = new Map<string, Id<'beds'>>();
@@ -861,7 +882,7 @@
 			for (const bed of beds) {
 				const newBedId = bed.shape === 'rectangle'
 					? await client.mutation(api.beds.createRectangle, {
-							layoutId: layoutId as Id<'layouts'>,
+							layoutId,
 							x: bed.x,
 							y: bed.y,
 							widthFeet: bed.widthFeet,
@@ -871,7 +892,7 @@
 							rotation: bed.rotation
 						})
 					: await client.mutation(api.beds.createCircle, {
-							layoutId: layoutId as Id<'layouts'>,
+							layoutId,
 							x: bed.x,
 							y: bed.y,
 							widthFeet: bed.widthFeet,
@@ -888,7 +909,7 @@
 				if (!newBedId) continue;
 
 				await client.mutation(api.plants.create, {
-					layoutId: layoutId as Id<'layouts'>,
+					layoutId,
 					bedId: newBedId,
 					flowerId: plant.flowerId,
 					x: plant.x,
@@ -904,7 +925,18 @@
 				});
 			}
 
-			currentLayoutId = layoutId as Id<'layouts'>;
+			// Save all fences
+			for (const fence of fences) {
+				await client.mutation(api.fences.create, {
+					layoutId,
+					vertices: fence.vertices,
+					heightFeet: fence.heightFeet,
+					name: fence.name,
+					color: fence.color
+				});
+			}
+
+			currentLayoutId = layoutId;
 			// Track saved state for unsaved changes detection
 			lastSavedState = { beds: [...beds], plants: [...plants] };
 		} catch (error) {
@@ -921,15 +953,27 @@
 		try {
 			const id = layoutId as Id<'layouts'>;
 
-			// Fetch beds and plants
-			const [loadedBeds, loadedPlants] = await Promise.all([
+			// Fetch beds, plants, and fences
+			const [loadedBeds, loadedPlants, loadedFences] = await Promise.all([
 				client.query(api.beds.listByLayout, { layoutId: id }),
-				client.query(api.plants.listByLayout, { layoutId: id })
+				client.query(api.plants.listByLayout, { layoutId: id }),
+				client.query(api.fences.listByLayout, { layoutId: id })
 			]);
 
 			// Replace local state (cast to match local types)
 			beds = loadedBeds as unknown as typeof beds;
-			plants = loadedPlants as unknown as typeof plants;
+			// Reconstruct plantingDates from flattened DB fields
+			plants = loadedPlants.map((p) => ({
+				...p,
+				plantingDates: (p.indoorStartDate || p.transplantDate || p.directSowDate)
+					? {
+							indoorStartDate: p.indoorStartDate,
+							transplantDate: p.transplantDate,
+							directSowDate: p.directSowDate
+						}
+					: undefined
+			})) as unknown as typeof plants;
+			fences = loadedFences as unknown as typeof fences;
 
 			currentLayoutId = id;
 			// Track saved state for unsaved changes detection
@@ -959,6 +1003,7 @@
 			if (currentLayoutId === id) {
 				beds = [];
 				plants = [];
+				fences = [];
 				currentLayoutId = null;
 				lastSavedState = null;
 				history.initialize([], []);
@@ -977,15 +1022,17 @@
 
 		beds = [];
 		plants = [];
+		fences = [];
 		currentLayoutId = null;
 		lastSavedState = null;
 		selectedBedIds = new Set();
 		selectedPlantIds = new Set();
+		selectedFenceIds = new Set();
 		history.initialize([], []);
 	}
 </script>
 
-<svelte:window onkeydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} onpointermove={handleWindowPointerMove} onpointerup={handleWindowPointerUp} />
 
 <div class="fixed inset-0 flex flex-col">
 	<!-- Header -->
@@ -1089,7 +1136,7 @@
 
 			{#if currentTool === 'select'}
 				<div class="flex-1 overflow-hidden">
-					<PlantPalette onDragStart={handleDragStart} onDragEnd={handleDragEnd} onPlantClick={handlePlantClick} />
+					<PlantPalette onPlantClick={handlePlantClick} />
 				</div>
 			{/if}
 
@@ -1098,6 +1145,7 @@
 		<!-- Canvas area (infinite canvas fills available space) -->
 		<main class="flex-1 overflow-hidden bg-muted/30 relative">
 			<FieldCanvas
+				bind:this={fieldCanvas}
 				{pixelsPerInch}
 				{zoom}
 				{panX}
@@ -1111,7 +1159,6 @@
 				{selectedBedIds}
 				{selectedPlantIds}
 				{selectedFenceIds}
-				{dragSource}
 				{sunSimulation}
 				{bedDefaults}
 				{fenceDefaults}
@@ -1183,3 +1230,6 @@
 	<WelcomeModal />
 	<TourOverlay />
 </div>
+
+<!-- Drag ghost for plant palette → canvas drag (rendered outside layout for z-index) -->
+<DragGhost />

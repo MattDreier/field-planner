@@ -9,15 +9,11 @@
 	import { Button } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
 	import { SlidersHorizontal, Plus } from 'lucide-svelte';
-	import type { DragSource } from '$lib/types';
-
 	interface Props {
-		onDragStart: (source: DragSource) => void;
-		onDragEnd: () => void;
 		onPlantClick?: (plantId: string) => void;
 	}
 
-	let { onDragStart, onDragEnd, onPlantClick }: Props = $props();
+	let { onPlantClick }: Props = $props();
 
 	// ── State ─────────────────────────────────────────────
 	let searchQuery = $state('');
@@ -227,23 +223,8 @@
 		sortBy = 'name';
 	}
 
-	function handleDragStart(plant: PlantData, e: DragEvent) {
-		e.dataTransfer?.setData('text/plain', plant.id);
-		onDragStart({
-			type: 'flower',
-			flowerId: plant.id,
-			flowerName: plant.name,
-			spacingMin: plant.spacingMin,
-			heightMax: plant.heightMax
-		});
-	}
 
-	function handleDragEnd() {
-		onDragEnd();
-	}
 </script>
-
-<svelte:window ondragend={handleDragEnd} />
 
 <div class="flex flex-col h-full">
 	<!-- Header -->
@@ -334,13 +315,11 @@
 					plants={item.plants}
 					isExpanded={effectiveExpanded.has(item.name)}
 					onToggle={() => toggleGroup(item.name)}
-					onDragStart={handleDragStart}
 					onPlantClick={onPlantClick}
 				/>
 			{:else}
 				<PlantCard
 					plant={item.plant}
-					onDragStart={(e) => handleDragStart(item.plant, e)}
 					onClick={() => onPlantClick?.(item.plant.id)}
 				/>
 			{/if}

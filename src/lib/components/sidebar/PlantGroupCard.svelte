@@ -8,11 +8,10 @@
 		plants: PlantData[];
 		isExpanded: boolean;
 		onToggle: () => void;
-		onDragStart: (plant: PlantData, e: DragEvent) => void;
 		onPlantClick?: (plantId: string) => void;
 	}
 
-	let { groupName, plants, isExpanded, onToggle, onDragStart, onPlantClick }: Props = $props();
+	let { groupName, plants, isExpanded, onToggle, onPlantClick }: Props = $props();
 </script>
 
 <div class="border border-border rounded-lg bg-card overflow-hidden">
@@ -35,7 +34,6 @@
 			{#each plants as plant (plant.id)}
 				<PlantCard
 					{plant}
-					onDragStart={(e) => onDragStart(plant, e)}
 					onClick={() => onPlantClick?.(plant.id)}
 				/>
 			{/each}
