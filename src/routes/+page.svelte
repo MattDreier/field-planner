@@ -664,6 +664,7 @@
 	// Pointer-based plant drag (replaces HTML5 drag-and-drop for touch support)
 	function handleWindowPointerMove(e: PointerEvent) {
 		if (plantDragState.isDragging) {
+			e.preventDefault(); // Prevent text selection during drag
 			updatePlantDragPosition(e.clientX, e.clientY);
 		}
 	}
