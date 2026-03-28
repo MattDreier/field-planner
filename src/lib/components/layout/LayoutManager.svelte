@@ -17,7 +17,7 @@
 		isSignedIn: boolean;
 		beds: Bed[];
 		plants: PlacedPlant[];
-		onSave?: (name: string) => Promise<void>;
+		onSave?: (name: string, existingLayoutId?: string) => Promise<void>;
 		onLoad?: (layoutId: string) => Promise<void>;
 		onDelete?: (layoutId: string) => Promise<void>;
 		onNew?: () => void;
@@ -59,7 +59,7 @@
 
 		isSaving = true;
 		try {
-			await onSave(currentLayoutName);
+			await onSave(currentLayoutName, currentLayoutId);
 		} finally {
 			isSaving = false;
 		}

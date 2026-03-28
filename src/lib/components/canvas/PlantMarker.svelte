@@ -1,4 +1,8 @@
 <script lang="ts">
+	/**
+	 * Renders a plant marker with spacing circle, phase icon, and label.
+	 * Expects field-inch coordinates; rendered inside a scaled <g> group.
+	 */
 	import SpacingCircle from './SpacingCircle.svelte';
 	import type { PlacedPlant, PlannedPlant } from '$lib/types';
 	import type { PlantData } from '$lib/data/plants';
@@ -17,9 +21,10 @@
 
 	interface Props {
 		plant: PlantData;
-		cx: number; // center x in pixels (absolute canvas position)
-		cy: number; // center y in pixels (absolute canvas position)
-		spacingRadiusPixels: number;
+		cx: number; // center x in field inches
+		cy: number; // center y in field inches
+		spacingRadius: number; // spacing radius in inches
+		scale: number; // pixelsPerInch * zoom (for counter-scaling)
 		heightColor: string;
 		hasConflict: boolean;
 		isShaded?: boolean;
@@ -34,10 +39,20 @@
 		onMoveEnd?: () => void; // Called when drag ends (for clearing guides)
 	}
 
-	let { plant, cx, cy, spacingRadiusPixels, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, successionIndex, dataTour, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
+	let { plant, cx, cy, spacingRadius, scale, heightColor, hasConflict, isShaded = false, isSelected, selectedPlantIds, phaseInfo, successionIndex, dataTour, onSelect, onMove, onMoveStart, onMoveEnd }: Props = $props();
 
-	// Plant marker size (visual representation)
-	const markerRadius = 8;
+	// Counter-scaled sizes (fixed visual size regardless of zoom)
+	const hitAreaRadius = $derived(22 / scale); // 44px touch target diameter
+	const markerRadius = $derived(8 / scale);
+	const iconScale = $derived(0.75 / scale); // Lucide icons are 24x24, scale down
+	const iconOffset = $derived(9 / scale); // Half of 24 * 0.75 = 18, offset to center
+	const selectedStrokeWidth = $derived(3 / scale);
+	const fallbackStrokeWidth = $derived(1 / scale);
+	const badgeRadius = $derived(10 / scale);
+	const badgeFontSize = $derived(10 / scale);
+	const badgeTextY = $derived(4 / scale);
+	const labelFontSize = $derived(12 / scale);
+	const labelOffsetY = $derived(8 / scale);
 
 	// Derive plant name from either type
 	const plantName = $derived('name' in plant ? plant.name : plant.flowerData.name);
@@ -123,7 +138,8 @@
 	<SpacingCircle
 		{cx}
 		{cy}
-		radius={spacingRadiusPixels}
+		radius={spacingRadius}
+		{scale}
 		{heightColor}
 		{hasConflict}
 		{isShaded}
@@ -141,21 +157,21 @@
 		<circle
 			cx={cx}
 			cy={cy}
-			r={22}
+			r={hitAreaRadius}
 			fill="transparent"
 			class="pointer-events-auto"
 		/>
-		<!-- Phase-specific Lucide icon (scaled from 24x24 to ~16px, centered at origin) -->
+		<!-- Phase-specific Lucide icon (counter-scaled to fixed visual size) -->
 		<g
 			transform="translate({cx}, {cy})"
 			style={isShaded ? 'opacity: 0.5; filter: saturate(0.3);' : ''}
 		>
 			{#if iconPath && phaseInfo?.phaseColor}
-				<!-- Lucide-style icon: scale 0.75 and translate to center -->
+				<!-- Lucide-style icon: counter-scale and translate to center -->
 				<g
 					class="transition-all"
 					filter={isSelected ? 'url(#selected-glow)' : ''}
-					transform="translate(-9, -9) scale(0.75)"
+					transform="translate(-{iconOffset}, -{iconOffset}) scale({iconScale})"
 				>
 					<!-- Colored icon -->
 					<path
@@ -173,7 +189,7 @@
 					r={markerRadius}
 					fill={heightColor}
 					stroke={isSelected ? 'white' : 'rgba(0,0,0,0.3)'}
-					stroke-width={isSelected ? 3 : 1}
+					stroke-width={isSelected ? selectedStrokeWidth : fallbackStrokeWidth}
 					class="transition-all hover:stroke-white hover:stroke-2"
 				/>
 			{/if}
@@ -182,15 +198,16 @@
 
 	<!-- Succession number badge (for planned plants) -->
 	{#if successionIndex !== undefined}
-		<g transform="translate({cx + spacingRadiusPixels * 0.6}, {cy - spacingRadiusPixels * 0.6})">
+		<g transform="translate({cx + spacingRadius * 0.6}, {cy - spacingRadius * 0.6})">
 			<circle
-				r="10"
+				r={badgeRadius}
 				fill="rgba(0,0,0,0.6)"
 			/>
 			<text
-				y="4"
+				y={badgeTextY}
 				text-anchor="middle"
-				class="text-[10px] fill-white font-bold pointer-events-none"
+				font-size={badgeFontSize}
+				class="fill-white font-bold pointer-events-none"
 			>
 				#{successionIndex + 1}
 			</text>
@@ -201,9 +218,10 @@
 	{#if isSelected}
 		<text
 			x={cx}
-			y={cy - markerRadius - 8}
+			y={cy - markerRadius - labelOffsetY}
 			text-anchor="middle"
-			class="text-xs fill-foreground font-medium pointer-events-none"
+			font-size={labelFontSize}
+			class="fill-foreground font-medium pointer-events-none"
 		>
 			{plantName}
 		</text>

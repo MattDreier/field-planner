@@ -9,7 +9,9 @@
 	import TimelinePanel from '$lib/components/timeline/TimelinePanel.svelte';
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Tool, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import type { Tool, Bed, PlacedPlant, Fence, FenceVertex, ZoneVertex, Zone, ZoneType, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import { calculatePolygonArea, sqInchesToSqFeet } from '$lib/utils/zone';
+	import ZoneProperties from '$lib/components/sidebar/ZoneProperties.svelte';
 	import { onMount } from 'svelte';
 	import { plantDragState, updatePlantDragPosition, endPlantDrag } from '$lib/stores/plantDrag.svelte';
 	import DragGhost from '$lib/components/ui/DragGhost.svelte';
@@ -145,6 +147,8 @@
 	let fences = $state<Fence[]>([]);
 	let selectedFenceIds = $state<Set<Id<'fences'>>>(new Set());
 	let fenceDefaults = $state({ heightFeet: 6 });
+	let zones = $state<Zone[]>([]);
+	let selectedZoneIds = $state<Set<Id<'zones'>>>(new Set());
 
 	// Track unsaved changes by comparing current state to last saved state
 	const hasUnsavedChanges = $derived.by(() => {
@@ -176,6 +180,11 @@
 		selectedBedIds.size === 1 ? beds.find((b) => selectedBedIds.has(b._id)) ?? null : null
 	);
 
+	// Derived: get the currently selected zone (for sidebar zone properties panel)
+	const selectedZone = $derived(
+		selectedZoneIds.size === 1 ? zones.find((z) => selectedZoneIds.has(z._id)) ?? null : null
+	);
+
 	// Calculate height range for legend
 	const heightRange = $derived(() => {
 		if (plants.length === 0) return { min: 0, max: 0 };
@@ -188,6 +197,7 @@
 		currentTool = tool;
 		selectedBedIds = new Set();
 		selectedPlantIds = new Set();
+		selectedZoneIds = new Set();
 	}
 
 	// Zoom actions
@@ -253,6 +263,7 @@
 				selectedBedIds = new Set([id]);
 			}
 			selectedPlantIds = new Set();
+			selectedZoneIds = new Set();
 		}
 	}
 
@@ -280,6 +291,7 @@
 			}
 			selectedBedIds = new Set();
 			selectedFenceIds = new Set();
+			selectedZoneIds = new Set();
 		}
 		viewingPlantId = null; // Clear palette selection when selecting a placed plant
 	}
@@ -308,6 +320,30 @@
 			}
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
+			selectedZoneIds = new Set();
+		}
+	}
+
+	function selectZone(id: Id<'zones'> | null, shiftKey = false) {
+		if (id === null) {
+			selectedZoneIds = new Set();
+			return;
+		}
+
+		if (shiftKey) {
+			const newSet = new Set(selectedZoneIds);
+			if (newSet.has(id)) newSet.delete(id);
+			else newSet.add(id);
+			selectedZoneIds = newSet;
+		} else {
+			if (selectedZoneIds.size === 1 && selectedZoneIds.has(id)) {
+				selectedZoneIds = new Set();
+			} else {
+				selectedZoneIds = new Set([id]);
+			}
+			selectedBedIds = new Set();
+			selectedPlantIds = new Set();
+			selectedFenceIds = new Set();
 		}
 	}
 
@@ -619,9 +655,86 @@
 		);
 	}
 
+	// Zone creation handler
+	function handleCreateZone(vertices: ZoneVertex[]) {
+		history.push(beds, plants);
+		const newZone: Zone = {
+			_id: `zone-${Date.now()}` as Id<'zones'>,
+			layoutId: 'local-layout' as Id<'layouts'>,
+			vertices,
+			zoneType: 'other',
+			createdAt: Date.now()
+		};
+		zones = [...zones, newZone];
+		setTool('select');
+	}
+
+	// Zone move handler (moves entire zone by delta inches, including control points)
+	function handleMoveZone(id: Id<'zones'>, deltaX: number, deltaY: number) {
+		zones = zones.map((z) =>
+			z._id === id
+				? {
+						...z,
+						vertices: z.vertices.map(v => ({
+							x: v.x + deltaX,
+							y: v.y + deltaY,
+							...(v.cp1 ? { cp1: { x: v.cp1.x + deltaX, y: v.cp1.y + deltaY } } : {}),
+							...(v.cp2 ? { cp2: { x: v.cp2.x + deltaX, y: v.cp2.y + deltaY } } : {})
+						}))
+					}
+				: z
+		);
+	}
+
+	// Zone vertex move handler (also shifts control points to maintain relative positions)
+	function handleMoveZoneVertex(zoneId: Id<'zones'>, vertexIndex: number, newX: number, newY: number) {
+		zones = zones.map((z) =>
+			z._id === zoneId
+				? {
+						...z,
+						vertices: z.vertices.map((v, i) => {
+							if (i !== vertexIndex) return v;
+							const dx = newX - v.x;
+							const dy = newY - v.y;
+							return {
+								x: newX,
+								y: newY,
+								...(v.cp1 ? { cp1: { x: v.cp1.x + dx, y: v.cp1.y + dy } } : {}),
+								...(v.cp2 ? { cp2: { x: v.cp2.x + dx, y: v.cp2.y + dy } } : {})
+							};
+						}),
+					}
+				: z
+		);
+	}
+
+	// Zone control point move handler
+	function handleMoveZoneControlPoint(zoneId: Id<'zones'>, vertexIndex: number, cpType: 'cp1' | 'cp2', x: number, y: number) {
+		zones = zones.map((z) =>
+			z._id === zoneId
+				? {
+						...z,
+						vertices: z.vertices.map((v, i) =>
+							i === vertexIndex
+								? { ...v, [cpType]: { x, y } }
+								: v
+						)
+					}
+				: z
+		);
+	}
+
+	// Zone update handler (for property changes from sidebar)
+	function handleUpdateZone(id: Id<'zones'>, updates: Partial<Zone>) {
+		history.push(beds, plants);
+		zones = zones.map((z) =>
+			z._id === id ? { ...z, ...updates } : z
+		);
+	}
+
 	// Delete handler - supports multi-selection
 	function handleDelete() {
-		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0 || selectedFenceIds.size > 0) {
+		if (selectedPlantIds.size > 0 || selectedBedIds.size > 0 || selectedFenceIds.size > 0 || selectedZoneIds.size > 0) {
 			// Save state before mutation
 			history.push(beds, plants);
 
@@ -644,9 +757,15 @@
 				fences = fences.filter((f) => !selectedFenceIds.has(f._id));
 			}
 
+			// Delete selected zones
+			if (selectedZoneIds.size > 0) {
+				zones = zones.filter((z) => !selectedZoneIds.has(z._id));
+			}
+
 			selectedPlantIds = new Set();
 			selectedBedIds = new Set();
 			selectedFenceIds = new Set();
+			selectedZoneIds = new Set();
 		}
 	}
 
@@ -796,12 +915,19 @@
 			selectedBedIds = new Set();
 			selectedPlantIds = new Set();
 			selectedFenceIds = new Set();
+			selectedZoneIds = new Set();
 		}
 
 		// Fence tool shortcut
 		if (e.key === 'f' || e.key === 'F') {
 			e.preventDefault();
 			setTool('fence');
+		}
+
+		// Zone tool shortcut (avoid conflicting with Cmd+Z undo)
+		if ((e.key === 'z' || e.key === 'Z') && !modKey) {
+			e.preventDefault();
+			setTool('zone');
 		}
 
 		// Toggle snap alignment with 'S'
@@ -1018,6 +1144,7 @@
 				beds = [];
 				plants = [];
 				fences = [];
+				zones = [];
 				currentLayoutId = null;
 				lastSavedState = null;
 				history.initialize([], []);
@@ -1037,11 +1164,13 @@
 		beds = [];
 		plants = [];
 		fences = [];
+		zones = [];
 		currentLayoutId = null;
 		lastSavedState = null;
 		selectedBedIds = new Set();
 		selectedPlantIds = new Set();
 		selectedFenceIds = new Set();
+		selectedZoneIds = new Set();
 		history.initialize([], []);
 	}
 </script>
@@ -1129,7 +1258,7 @@
 		<aside class="w-80 border-r border-border bg-card flex flex-col overflow-hidden">
 			<BedTools
 				currentTool={currentTool}
-				hasSelection={!!selectedBedId || !!selectedPlantId || selectedFenceIds.size > 0}
+				hasSelection={!!selectedBedId || !!selectedPlantId || selectedFenceIds.size > 0 || selectedZoneIds.size > 0}
 				{selectedBed}
 				{sunSimulation}
 				{bedDefaults}
@@ -1147,6 +1276,14 @@
 				onToggleSnap={() => snapEnabled = !snapEnabled}
 				onTimeSliderRelease={() => timeSliderReleased = true}
 			/>
+
+			{#if selectedZone}
+				<ZoneProperties
+					zone={selectedZone}
+					{snapEnabled}
+					onUpdateZone={(id, updates) => handleUpdateZone(id as Id<'zones'>, updates)}
+				/>
+			{/if}
 
 			{#if currentTool === 'select'}
 				<div class="flex-1 overflow-hidden">
@@ -1170,22 +1307,29 @@
 				{beds}
 				{plants}
 				{fences}
+				{zones}
 				{selectedBedIds}
 				{selectedPlantIds}
 				{selectedFenceIds}
+				{selectedZoneIds}
 				{sunSimulation}
 				{bedDefaults}
 				{fenceDefaults}
 				onSelectBed={selectBed}
 				onSelectPlant={selectPlant}
 				onSelectFence={selectFence}
+				onSelectZone={selectZone}
 				onCreateBed={handleCreateBed}
 				onCreateFence={handleCreateFence}
+				onCreateZone={handleCreateZone}
 				onMoveBed={handleMoveBed}
 				onResizeBed={handleResizeBed}
 				onRotateBed={handleRotateBed}
 				onMoveFence={handleMoveFence}
 				onMoveVertex={handleMoveVertex}
+				onMoveZone={handleMoveZone}
+				onMoveZoneVertex={handleMoveZoneVertex}
+				onMoveZoneControlPoint={handleMoveZoneControlPoint}
 				onPlacePlant={handlePlacePlant}
 				onMovePlant={handleMovePlant}
 				onMoveStart={handleMoveStart}

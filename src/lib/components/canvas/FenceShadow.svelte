@@ -3,13 +3,14 @@
 	 * Renders a fence segment's shadow as a quadrilateral polygon.
 	 * The shadow projects from both ends of the fence segment in the shadow direction.
 	 * Uses a gradient for natural feathering effect.
+	 * Expects field-inch coordinates; rendered inside a scaled <g> group.
 	 */
 	import { getEffectiveTheme } from '$lib/stores/theme.svelte';
 
 	interface Props {
 		fenceId: string;
 		segmentIndex: number;
-		// Quadrilateral points in canvas pixels
+		// Quadrilateral points in field inches
 		p1: { x: number; y: number }; // base start
 		p2: { x: number; y: number }; // base end
 		p3: { x: number; y: number }; // shadow end

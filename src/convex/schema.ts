@@ -78,5 +78,47 @@ export default defineSchema({
 	})
 		.index('by_bed', ['bedId'])
 		.index('by_layout', ['layoutId'])
+		.index('by_user', ['userId']),
+
+	// Fences (one-to-many with layouts)
+	fences: defineTable({
+		userId: v.string(),
+		layoutId: v.id('layouts'),
+		vertices: v.array(v.object({ x: v.number(), y: v.number() })),
+		heightFeet: v.number(),
+		name: v.optional(v.string()),
+		color: v.optional(v.string()),
+		createdAt: v.number()
+	})
+		.index('by_layout', ['layoutId'])
+		.index('by_user', ['userId']),
+
+	// Zones (one-to-many with layouts)
+	zones: defineTable({
+		userId: v.string(),
+		layoutId: v.id('layouts'),
+		vertices: v.array(v.object({
+			x: v.number(),
+			y: v.number(),
+			cp1: v.optional(v.object({ x: v.number(), y: v.number() })),
+			cp2: v.optional(v.object({ x: v.number(), y: v.number() })),
+		})),
+		zoneType: v.union(
+			v.literal('lawn'),
+			v.literal('mulch'),
+			v.literal('rocks'),
+			v.literal('water'),
+			v.literal('landscape_fabric'),
+			v.literal('patio'),
+			v.literal('other')
+		),
+		name: v.optional(v.string()),
+		depthInches: v.optional(v.number()),
+		fabricWidthInches: v.optional(v.number()),
+		fabricOverlapInches: v.optional(v.number()),
+		fabricRotationDeg: v.optional(v.number()),
+		createdAt: v.number()
+	})
+		.index('by_layout', ['layoutId'])
 		.index('by_user', ['userId'])
 });

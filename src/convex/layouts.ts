@@ -85,6 +85,48 @@ export const update = mutation({
 	}
 });
 
+// Delete all contents (beds, plants, fences) without deleting the layout itself
+export const clearContents = mutation({
+	args: { id: v.id('layouts') },
+	handler: async (ctx, args) => {
+		const userId = await requireAuth(ctx);
+		const layout = await ctx.db.get(args.id);
+		if (!layout) {
+			throw new Error('Layout not found');
+		}
+		if (layout.userId !== userId) {
+			throw new Error('Not authorized to modify this layout');
+		}
+
+		// Delete all plants
+		const plants = await ctx.db
+			.query('placedPlants')
+			.withIndex('by_layout', (q) => q.eq('layoutId', args.id))
+			.collect();
+		for (const plant of plants) {
+			await ctx.db.delete(plant._id);
+		}
+
+		// Delete all beds
+		const beds = await ctx.db
+			.query('beds')
+			.withIndex('by_layout', (q) => q.eq('layoutId', args.id))
+			.collect();
+		for (const bed of beds) {
+			await ctx.db.delete(bed._id);
+		}
+
+		// Delete all fences
+		const fences = await ctx.db
+			.query('fences')
+			.withIndex('by_layout', (q) => q.eq('layoutId', args.id))
+			.collect();
+		for (const fence of fences) {
+			await ctx.db.delete(fence._id);
+		}
+	}
+});
+
 // Delete a layout and all its beds/plants
 export const remove = mutation({
 	args: { id: v.id('layouts') },
@@ -114,6 +156,15 @@ export const remove = mutation({
 			.collect();
 		for (const bed of beds) {
 			await ctx.db.delete(bed._id);
+		}
+
+		// Delete all fences in this layout
+		const fences = await ctx.db
+			.query('fences')
+			.withIndex('by_layout', (q) => q.eq('layoutId', args.id))
+			.collect();
+		for (const fence of fences) {
+			await ctx.db.delete(fence._id);
 		}
 
 		// Delete the layout itself

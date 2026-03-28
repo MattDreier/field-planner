@@ -1,15 +1,20 @@
 <script lang="ts">
+	/**
+	 * Renders a spacing circle around a plant marker.
+	 * Expects field-inch coordinates; rendered inside a scaled <g> group.
+	 */
 	interface Props {
-		cx: number; // center x in pixels
-		cy: number; // center y in pixels
-		radius: number; // radius in pixels
+		cx: number; // center x in field inches
+		cy: number; // center y in field inches
+		radius: number; // spacing radius in inches
+		scale: number; // pixelsPerInch * zoom (for counter-scaling)
 		heightColor: string; // HSL color based on plant height (e.g., "hsl(180, 70%, 50%)")
 		hasConflict: boolean;
 		isShaded?: boolean;
 		isSelected: boolean;
 	}
 
-	let { cx, cy, radius, heightColor, hasConflict, isShaded = false, isSelected }: Props = $props();
+	let { cx, cy, radius, scale, heightColor, hasConflict, isShaded = false, isSelected }: Props = $props();
 
 	// Colors for special states
 	const conflictColor = 'rgb(239, 68, 68)';
@@ -42,6 +47,10 @@
 				? 1
 				: 0.6
 	);
+
+	// Counter-scaled sizes (fixed visual size regardless of zoom)
+	const strokeWidth = $derived((isSelected ? 2 : 1) / scale);
+	const dashArray = $derived(hasConflict ? `${4 / scale} ${2 / scale}` : 'none');
 </script>
 
 <circle
@@ -52,6 +61,6 @@
 	fill-opacity={fillOpacity}
 	stroke={strokeColor}
 	stroke-opacity={strokeOpacity}
-	stroke-width={isSelected ? 2 : 1}
-	stroke-dasharray={hasConflict ? '4 2' : 'none'}
+	stroke-width={strokeWidth}
+	stroke-dasharray={dashArray}
 />

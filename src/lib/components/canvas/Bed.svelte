@@ -5,12 +5,11 @@
 
 	interface Props {
 		bed: BedType;
-		x: number; // top-left x in pixels
-		y: number; // top-left y in pixels
-		widthPixels: number;
-		heightPixels: number;
-		pixelsPerInch: number;
-		zoom: number;
+		x: number; // top-left x in field inches
+		y: number; // top-left y in field inches
+		widthInches: number;
+		heightInches: number;
+		scale: number; // pixelsPerInch * zoom (for counter-scaling fixed-pixel elements)
 		isSelected: boolean;
 		selectedBedIds: Set<Id<'beds'>>; // All selected beds for multi-drag
 		onSelect: (id: Id<'beds'>, shiftKey?: boolean) => void;
@@ -21,12 +20,21 @@
 		onRotate?: (id: Id<'beds'>, rotation: number) => void;
 	}
 
-	let { bed, x, y, widthPixels, heightPixels, pixelsPerInch, zoom, isSelected, selectedBedIds, onSelect, onMove, onMoveStart, onMoveEnd, onResize, onRotate }: Props = $props();
+	let { bed, x, y, widthInches, heightInches, scale, isSelected, selectedBedIds, onSelect, onMove, onMoveStart, onMoveEnd, onResize, onRotate }: Props = $props();
 
 	// Use $derived for reactive computed values
 	const fillColor = $derived(bed.fillColor || 'rgba(139, 69, 19, 0.3)');
 	const strokeColor = $derived(isSelected ? 'rgb(59, 130, 246)' : 'rgba(139, 69, 19, 0.8)');
-	const strokeWidth = $derived(isSelected ? 3 : 2);
+	const strokeWidth = $derived((isSelected ? 3 : 2) / scale);
+
+	// Counter-scaled sizes: fixed-pixel appearance regardless of zoom
+	const handleSize = $derived(8 / scale);
+	const handleStrokeWidth = $derived(2 / scale);
+	const borderRadius = $derived(4 / scale);
+	const labelFontSize = $derived(14 / scale);
+	const dimLabelFontSize = $derived(12 / scale);
+	const dimLabelOffset = $derived(16 / scale);
+	const rotationHandleDistance = $derived(heightInches / 2 + 30 / scale);
 
 	// Drag state
 	let isDragging = $state(false);
@@ -101,7 +109,6 @@
 	function handleResizePointerMove(e: PointerEvent) {
 		if (!resizeHandle || !onResize) return;
 
-		const scale = pixelsPerInch * zoom;
 		const deltaX = e.clientX - resizeStartX;
 		const deltaY = e.clientY - resizeStartY;
 
@@ -134,13 +141,10 @@
 		onMoveEnd?.();
 	}
 
-	// Resize handles (shown when selected)
-	const handleSize = 8;
-
 	// Rotation
 	const rotation = $derived(bed.rotation ?? 0);
-	const centerX = $derived(x + widthPixels / 2);
-	const centerY = $derived(y + heightPixels / 2);
+	const centerX = $derived(x + widthInches / 2);
+	const centerY = $derived(y + heightInches / 2);
 
 	function handleRotation(degrees: number) {
 		if (onRotate) {
@@ -149,7 +153,7 @@
 	}
 </script>
 
-<g class="bed" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id, e.shiftKey)}>
+<g class="bed" role="button" tabindex="0" style="outline: none" onkeydown={(e) => e.key === 'Enter' && onSelect(bed._id, e.shiftKey)}>
 	<!-- Rotation wrapper - all bed content rotates around center -->
 	<g transform="rotate({rotation}, {centerX}, {centerY})">
 	{#if bed.shape === 'rectangle'}
@@ -157,13 +161,13 @@
 		<rect
 			{x}
 			{y}
-			width={widthPixels}
-			height={heightPixels}
+			width={widthInches}
+			height={heightInches}
 			fill={fillColor}
 			stroke={strokeColor}
 			stroke-width={strokeWidth}
-			rx="4"
-			ry="4"
+			rx={borderRadius}
+			ry={borderRadius}
 			class="cursor-move touch-none"
 			role="button"
 			tabindex="-1"
@@ -174,10 +178,10 @@
 	{:else}
 		<!-- Circular bed -->
 		<ellipse
-			cx={x + widthPixels / 2}
-			cy={y + heightPixels / 2}
-			rx={widthPixels / 2}
-			ry={heightPixels / 2}
+			cx={x + widthInches / 2}
+			cy={y + widthInches / 2}
+			rx={widthInches / 2}
+			ry={widthInches / 2}
 			fill={fillColor}
 			stroke={strokeColor}
 			stroke-width={strokeWidth}
@@ -193,11 +197,13 @@
 	<!-- Bed name label -->
 	{#if bed.name}
 		<text
-			x={x + widthPixels / 2}
-			y={y + heightPixels / 2}
+			x={x + widthInches / 2}
+			y={y + heightInches / 2}
 			text-anchor="middle"
 			dominant-baseline="middle"
-			class="text-sm fill-foreground font-medium pointer-events-none"
+			font-size={labelFontSize}
+			font-weight="500"
+			class="fill-foreground pointer-events-none"
 		>
 			{bed.name}
 		</text>
@@ -205,10 +211,11 @@
 
 	<!-- Dimension label -->
 	<text
-		x={x + widthPixels / 2}
-		y={y + heightPixels + 16}
+		x={x + widthInches / 2}
+		y={y + heightInches + dimLabelOffset}
 		text-anchor="middle"
-		class="text-xs fill-muted-foreground pointer-events-none"
+		font-size={dimLabelFontSize}
+		class="fill-muted-foreground pointer-events-none"
 	>
 		{bed.widthFeet}' × {bed.shape === 'rectangle' ? bed.heightFeet : bed.widthFeet}'
 	</text>
@@ -217,13 +224,13 @@
 	{#if isSelected && onResize && bed.shape === 'rectangle'}
 		<!-- Bottom-right corner handle (SE) -->
 		<rect
-			x={x + widthPixels - handleSize / 2}
-			y={y + heightPixels - handleSize / 2}
+			x={x + widthInches - handleSize / 2}
+			y={y + heightInches - handleSize / 2}
 			width={handleSize}
 			height={handleSize}
 			fill="white"
 			stroke="rgb(59, 130, 246)"
-			stroke-width="2"
+			stroke-width={handleStrokeWidth}
 			class="cursor-se-resize touch-none"
 			role="button"
 			tabindex="-1"
@@ -234,13 +241,13 @@
 		/>
 		<!-- Right-center handle (E) -->
 		<rect
-			x={x + widthPixels - handleSize / 2}
-			y={y + heightPixels / 2 - handleSize / 2}
+			x={x + widthInches - handleSize / 2}
+			y={y + heightInches / 2 - handleSize / 2}
 			width={handleSize}
 			height={handleSize}
 			fill="white"
 			stroke="rgb(59, 130, 246)"
-			stroke-width="2"
+			stroke-width={handleStrokeWidth}
 			class="cursor-e-resize touch-none"
 			role="button"
 			tabindex="-1"
@@ -251,13 +258,13 @@
 		/>
 		<!-- Bottom-center handle (S) -->
 		<rect
-			x={x + widthPixels / 2 - handleSize / 2}
-			y={y + heightPixels - handleSize / 2}
+			x={x + widthInches / 2 - handleSize / 2}
+			y={y + heightInches - handleSize / 2}
 			width={handleSize}
 			height={handleSize}
 			fill="white"
 			stroke="rgb(59, 130, 246)"
-			stroke-width="2"
+			stroke-width={handleStrokeWidth}
 			class="cursor-s-resize touch-none"
 			role="button"
 			tabindex="-1"
@@ -275,7 +282,8 @@
 			{centerX}
 			{centerY}
 			currentRotation={rotation}
-			distance={heightPixels / 2 + 30}
+			distance={rotationHandleDistance}
+			{scale}
 			onRotate={handleRotation}
 			onRotateStart={onMoveStart}
 		/>

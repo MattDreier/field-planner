@@ -9,9 +9,11 @@
  */
 
 import type * as beds from "../beds.js";
+import type * as fences from "../fences.js";
 import type * as layouts from "../layouts.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as plants from "../plants.js";
+import type * as properties from "../properties.js";
 
 import type {
   ApiFromModules,
@@ -21,9 +23,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   beds: typeof beds;
+  fences: typeof fences;
   layouts: typeof layouts;
   "lib/auth": typeof lib_auth;
   plants: typeof plants;
+  properties: typeof properties;
 }>;
 
 /**

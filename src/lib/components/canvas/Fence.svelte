@@ -2,15 +2,15 @@
 	/**
 	 * Renders a fence as a polyline with vertex handles when selected.
 	 * Supports dragging the entire fence or individual vertices.
+	 * Expects field-inch coordinates; rendered inside a scaled <g> group.
 	 */
 	import type { Fence as FenceType, FenceVertex } from '$lib/types';
 	import type { Id } from '../../../convex/_generated/dataModel';
 
 	interface Props {
 		fence: FenceType;
-		canvasVertices: Array<{ x: number; y: number }>; // vertices in canvas pixels
-		pixelsPerInch: number;
-		zoom: number;
+		vertices: FenceVertex[]; // field-inch coordinates
+		scale: number; // pixelsPerInch * zoom (for counter-scaling)
 		isSelected: boolean;
 		selectedFenceIds: Set<Id<'fences'>>;
 		onSelect: (id: Id<'fences'>, shiftKey?: boolean) => void;
@@ -22,9 +22,8 @@
 
 	let {
 		fence,
-		canvasVertices,
-		pixelsPerInch,
-		zoom,
+		vertices,
+		scale,
 		isSelected,
 		selectedFenceIds,
 		onSelect,
@@ -36,24 +35,23 @@
 
 	// Styling
 	const strokeColor = $derived(fence.color || (isSelected ? 'rgb(59, 130, 246)' : 'rgb(120, 113, 108)'));
-	const strokeWidth = $derived(isSelected ? 4 : 3);
 
-	// Convert vertices to SVG polyline points string
+	// Convert vertices to SVG polyline points string (field-inch coordinates)
 	const pointsString = $derived(
-		canvasVertices.map(v => `${v.x},${v.y}`).join(' ')
+		vertices.map(v => `${v.x},${v.y}`).join(' ')
 	);
 
-	// Calculate midpoint for height label
+	// Calculate midpoint for height label (field-inch coordinates)
 	const midpoint = $derived.by(() => {
-		if (canvasVertices.length < 2) return { x: 0, y: 0 };
-		const mid = Math.floor(canvasVertices.length / 2);
-		if (canvasVertices.length % 2 === 0) {
+		if (vertices.length < 2) return { x: 0, y: 0 };
+		const mid = Math.floor(vertices.length / 2);
+		if (vertices.length % 2 === 0) {
 			// Even number of vertices - average the two middle ones
-			const v1 = canvasVertices[mid - 1];
-			const v2 = canvasVertices[mid];
+			const v1 = vertices[mid - 1];
+			const v2 = vertices[mid];
 			return { x: (v1.x + v2.x) / 2, y: (v1.y + v2.y) / 2 };
 		} else {
-			return canvasVertices[mid];
+			return vertices[mid];
 		}
 	});
 
@@ -68,9 +66,13 @@
 	let vertexDragStartY = $state(0);
 	let vertexStartPos = $state<{ x: number; y: number } | null>(null);
 
-	// Handle size for vertex markers
-	const handleRadius = 6;
-	const hitAreaRadius = 12;
+	// Counter-scaled sizes (fixed visual size regardless of zoom)
+	const handleRadius = $derived(6 / scale);
+	const hitAreaRadius = $derived(12 / scale);
+	const labelFontSize = $derived(11 / scale);
+	const labelOffsetY = $derived(12 / scale);
+	const fenceStrokeWidth = $derived((isSelected ? 4 : 3) / scale);
+	const handleStrokeWidth = $derived(2 / scale);
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
@@ -121,7 +123,6 @@
 	function handleVertexPointerMove(e: PointerEvent) {
 		if (draggingVertexIndex === null || !onMoveVertex || !vertexStartPos) return;
 
-		const scale = pixelsPerInch * zoom;
 		const deltaX = e.clientX - vertexDragStartX;
 		const deltaY = e.clientY - vertexDragStartY;
 
@@ -140,13 +141,13 @@
 	}
 </script>
 
-<g class="fence" role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && onSelect(fence._id, e.shiftKey)}>
+<g class="fence" role="button" tabindex="0" style="outline: none" onkeydown={(e) => e.key === 'Enter' && onSelect(fence._id, e.shiftKey)}>
 	<!-- Fence line (polyline connecting all vertices) -->
 	<polyline
 		points={pointsString}
 		fill="none"
 		stroke={strokeColor}
-		stroke-width={strokeWidth}
+		stroke-width={fenceStrokeWidth}
 		stroke-linecap="round"
 		stroke-linejoin="round"
 		class="cursor-move touch-none"
@@ -162,7 +163,7 @@
 		points={pointsString}
 		fill="none"
 		stroke="transparent"
-		stroke-width={strokeWidth + 16}
+		stroke-width={20 / scale}
 		stroke-linecap="round"
 		stroke-linejoin="round"
 		class="cursor-move touch-none"
@@ -176,16 +177,17 @@
 	<!-- Height label at midpoint -->
 	<text
 		x={midpoint.x}
-		y={midpoint.y - 12}
+		y={midpoint.y - labelOffsetY}
 		text-anchor="middle"
-		class="text-xs fill-muted-foreground pointer-events-none select-none"
+		font-size={labelFontSize}
+		class="fill-muted-foreground pointer-events-none select-none"
 	>
 		{fence.heightFeet}' fence
 	</text>
 
 	<!-- Vertex handles (shown when selected) -->
 	{#if isSelected}
-		{#each canvasVertices as vertex, index}
+		{#each vertices as vertex, index}
 			<!-- Invisible larger hit area -->
 			<circle
 				cx={vertex.x}
@@ -207,7 +209,7 @@
 				r={handleRadius}
 				fill="white"
 				stroke="rgb(59, 130, 246)"
-				stroke-width="2"
+				stroke-width={handleStrokeWidth}
 				class="pointer-events-none"
 			/>
 		{/each}

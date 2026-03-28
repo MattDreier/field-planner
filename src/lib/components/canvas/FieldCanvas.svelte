@@ -6,10 +6,12 @@
 	import ShadowLayer from './ShadowLayer.svelte';
 	import SmartGuides from './SmartGuides.svelte';
 	import SelectionDistance from './SelectionDistance.svelte';
-	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, FenceVertex, Tool, SunSimulationState } from '$lib/types';
+	import ZoneComponent from './Zone.svelte';
+	import type { Bed as BedType, PlacedPlant as PlacedPlantType, Fence as FenceType, Zone as ZoneType, FenceVertex, ZoneVertex, Tool, SunSimulationState } from '$lib/types';
+	import { buildZonePath } from '$lib/utils/zone';
 	import { plantDragState } from '$lib/stores/plantDrag.svelte';
 	import { getBedDimensionsInInches } from '$lib/types';
-	import { fieldToCanvas, canvasToField, bedLocalToField, fieldToBedLocal, isInsideBed } from '$lib/utils/coordinates';
+	import { canvasToField, bedLocalToField, fieldToBedLocal, isInsideBed } from '$lib/utils/coordinates';
 	import { detectSpacingConflicts } from '$lib/utils/collision';
 	import { calculateHeightColors } from '$lib/utils/color';
 	import {
@@ -58,6 +60,13 @@
 		selectedBedIds: Set<Id<'beds'>>;
 		selectedPlantIds: Set<Id<'placedPlants'>>;
 		selectedFenceIds?: Set<Id<'fences'>>;
+		zones?: ZoneType[];
+		selectedZoneIds?: Set<Id<'zones'>>;
+		onSelectZone?: (id: Id<'zones'> | null, shiftKey?: boolean) => void;
+		onCreateZone?: (vertices: ZoneVertex[]) => void;
+		onMoveZone?: (id: Id<'zones'>, deltaX: number, deltaY: number) => void;
+		onMoveZoneVertex?: (zoneId: Id<'zones'>, vertexIndex: number, x: number, y: number) => void;
+		onMoveZoneControlPoint?: (zoneId: Id<'zones'>, vertexIndex: number, cpType: 'cp1' | 'cp2', x: number, y: number) => void;
 		sunSimulation: SunSimulationState;
 		bedDefaults?: BedDefaults;
 		fenceDefaults?: FenceDefaults;
@@ -93,6 +102,13 @@
 		selectedBedIds,
 		selectedPlantIds,
 		selectedFenceIds = new Set(),
+		zones = [],
+		selectedZoneIds = new Set(),
+		onSelectZone,
+		onCreateZone,
+		onMoveZone,
+		onMoveZoneVertex,
+		onMoveZoneControlPoint,
 		sunSimulation,
 		bedDefaults = { widthFeet: 4, heightFeet: 8, rotation: 0, raisedBedHeightFeet: 0 },
 		fenceDefaults = { heightFeet: 6 },
@@ -288,6 +304,9 @@
 	// Canvas state helper
 	const canvasState = $derived({ zoom, panX, panY, pixelsPerInch });
 
+	// Field-inch scale factor (used for the transform group and counter-scaling)
+	const scale = $derived(pixelsPerInch * zoom);
+
 	// Panning state
 	let isPanning = $state(false);
 	let panStartX = $state(0);
@@ -342,25 +361,17 @@
 			}
 
 			const absolutePos = bedLocalToField(plant.x, plant.y, bed);
-			const canvasPos = fieldToCanvas(absolutePos.x, absolutePos.y, canvasState);
-			const spacingRadiusPixels = (plant.spacingMin / 2) * pixelsPerInch * zoom;
 
 			return {
 				...plant,
 				absoluteX: absolutePos.x,
 				absoluteY: absolutePos.y,
-				canvasX: canvasPos.x,
-				canvasY: canvasPos.y,
-				spacingRadiusPixels,
 				visibility,
 				currentHeight
 			};
 		}).filter(Boolean) as Array<PlacedPlantType & {
 			absoluteX: number;
 			absoluteY: number;
-			canvasX: number;
-			canvasY: number;
-			spacingRadiusPixels: number;
 			visibility: PlantVisibility;
 			currentHeight: number;
 		}>;
@@ -406,8 +417,6 @@
 
 				// Convert to absolute field coordinates
 				const absolutePos = bedLocalToField(localX, localY, bed);
-				const canvasPos = fieldToCanvas(absolutePos.x, absolutePos.y, canvasState);
-				const spacingRadiusPixels = (flowerData.spacingMin / 2) * pixelsPerInch * zoom;
 
 				return {
 					...planned,
@@ -417,9 +426,6 @@
 					localY,
 					absoluteX: absolutePos.x,
 					absoluteY: absolutePos.y,
-					canvasX: canvasPos.x,
-					canvasY: canvasPos.y,
-					spacingRadiusPixels,
 					visibility
 				};
 			})
@@ -431,9 +437,6 @@
 					localY: number;
 					absoluteX: number;
 					absoluteY: number;
-					canvasX: number;
-					canvasY: number;
-					spacingRadiusPixels: number;
 					visibility: PlantVisibility;
 				}
 			>;
@@ -574,6 +577,70 @@
 		fencePreviewPoint = null;
 	}
 
+	// Zone creation state
+	let isCreatingZone = $state(false);
+	let zoneVertices = $state<ZoneVertex[]>([]);
+	let zonePreviewPoint = $state<{ x: number; y: number } | null>(null);
+	// Bezier handle creation: true while dragging from a just-placed vertex to set control points
+	let zoneCreationDragging = $state(false);
+	let zoneCreationDragStart = $state<{ x: number; y: number } | null>(null);
+	// Distance input: type a value to constrain the next edge length
+	let zoneDistanceInput = $state('');
+	let zoneDistanceLocked = $state<number | null>(null); // distance in inches when confirmed
+
+	// Parse distance input (feet/inches)
+	function parseZoneDistance(input: string): number | null {
+		const trimmed = input.trim().toLowerCase();
+		if (!trimmed) return null;
+		// Feet and inches: 2' 6" or 2ft 6in
+		const feetInches = trimmed.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)\s*(\d+(?:\.\d+)?)\s*(?:"|in|inches?)?$/);
+		if (feetInches) return parseFloat(feetInches[1]) * 12 + parseFloat(feetInches[2]);
+		// Just feet: 2' or 2ft
+		const feet = trimmed.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft|feet)$/);
+		if (feet) return parseFloat(feet[1]) * 12;
+		// Just inches: 24 or 24" or 24in
+		const inches = trimmed.match(/^(\d+(?:\.\d+)?)\s*(?:"|in|inches?)?$/);
+		if (inches) return parseFloat(inches[1]);
+		return null;
+	}
+
+	// Constrain a point to a fixed distance from origin along the direction to target
+	function constrainDistance(origin: { x: number; y: number }, target: { x: number; y: number }, distInches: number): { x: number; y: number } {
+		const dx = target.x - origin.x;
+		const dy = target.y - origin.y;
+		const len = Math.sqrt(dx * dx + dy * dy);
+		if (len === 0) return { x: origin.x + distInches, y: origin.y };
+		return {
+			x: origin.x + (dx / len) * distInches,
+			y: origin.y + (dy / len) * distInches
+		};
+	}
+
+	// Finish zone creation (called by double-click or Enter key)
+	function finishZone() {
+		if (zoneVertices.length >= 3 && onCreateZone) {
+			onCreateZone(zoneVertices);
+		}
+		isCreatingZone = false;
+		zoneVertices = [];
+		zonePreviewPoint = null;
+		zoneCreationDragging = false;
+		zoneCreationDragStart = null;
+		zoneDistanceInput = '';
+		zoneDistanceLocked = null;
+	}
+
+	// Cancel zone creation (called by Escape key)
+	function cancelZone() {
+		isCreatingZone = false;
+		zoneVertices = [];
+		zonePreviewPoint = null;
+		zoneCreationDragging = false;
+		zoneCreationDragStart = null;
+		zoneDistanceInput = '';
+		zoneDistanceLocked = null;
+	}
+
 	function handleCanvasPointerDown(e: PointerEvent) {
 		if (e.button !== 0) return;
 
@@ -586,6 +653,7 @@
 			onSelectBed(null);
 			onSelectPlant(null);
 			onSelectFence?.(null);
+			onSelectZone?.(null);
 			selectedPlannedPlantIds = new Set(); // Clear planned plant selection too
 			return;
 		}
@@ -612,6 +680,29 @@
 
 			isCreatingFence = true;
 			fenceVertices = [...fenceVertices, { x: fieldPos.x, y: fieldPos.y }];
+		}
+
+		// Zone tool: add vertex on click, start tracking for bezier drag
+		if (tool === 'zone') {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			const canvasX = e.clientX - rect.left;
+			const canvasY = e.clientY - rect.top;
+			let fieldPos = canvasToField(canvasX, canvasY, canvasState);
+
+			// If distance is locked, constrain the new vertex position
+			if (zoneDistanceLocked !== null && zoneVertices.length > 0) {
+				const lastVert = zoneVertices[zoneVertices.length - 1];
+				fieldPos = constrainDistance(lastVert, fieldPos, zoneDistanceLocked);
+			}
+
+			isCreatingZone = true;
+			zoneVertices = [...zoneVertices, { x: fieldPos.x, y: fieldPos.y }];
+			zoneCreationDragging = true;
+			zoneCreationDragStart = { x: fieldPos.x, y: fieldPos.y };
+			(e.currentTarget as SVGElement).setPointerCapture(e.pointerId);
+			// Clear distance after placing vertex
+			zoneDistanceInput = '';
+			zoneDistanceLocked = null;
 		}
 	}
 
@@ -642,9 +733,56 @@
 			const fieldPos = canvasToField(canvasX, canvasY, canvasState);
 			fencePreviewPoint = { x: fieldPos.x, y: fieldPos.y };
 		}
+
+		// Handle zone bezier handle creation (dragging from a just-placed vertex)
+		if (tool === 'zone' && isCreatingZone && zoneCreationDragging && zoneCreationDragStart && zoneVertices.length > 0) {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			const canvasX = e.clientX - rect.left;
+			const canvasY = e.clientY - rect.top;
+			const fieldPos = canvasToField(canvasX, canvasY, canvasState);
+
+			const lastIdx = zoneVertices.length - 1;
+			const vertex = zoneVertices[lastIdx];
+			const dx = fieldPos.x - vertex.x;
+			const dy = fieldPos.y - vertex.y;
+
+			// Only create control points if dragged far enough (> 2 inches)
+			if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+				const updated = [...zoneVertices];
+				updated[lastIdx] = {
+					...vertex,
+					cp1: { x: vertex.x + dx, y: vertex.y + dy },
+					cp2: { x: vertex.x - dx, y: vertex.y - dy }
+				};
+				zoneVertices = updated;
+			}
+			return;
+		}
+
+		// Handle zone preview
+		if (tool === 'zone' && isCreatingZone && zoneVertices.length > 0) {
+			const rect = (e.currentTarget as SVGElement).getBoundingClientRect();
+			const canvasX = e.clientX - rect.left;
+			const canvasY = e.clientY - rect.top;
+			let fieldPos = canvasToField(canvasX, canvasY, canvasState);
+			// Constrain preview to locked distance
+			if (zoneDistanceLocked !== null) {
+				const lastVert = zoneVertices[zoneVertices.length - 1];
+				fieldPos = constrainDistance(lastVert, fieldPos, zoneDistanceLocked);
+			}
+			zonePreviewPoint = { x: fieldPos.x, y: fieldPos.y };
+		}
 	}
 
 	function handleCanvasPointerUp(e: PointerEvent) {
+		// End zone bezier handle creation
+		if (tool === 'zone' && zoneCreationDragging) {
+			zoneCreationDragging = false;
+			zoneCreationDragStart = null;
+			(e.currentTarget as SVGElement).releasePointerCapture(e.pointerId);
+			return;
+		}
+
 		// End panning
 		if (isPanning) {
 			isPanning = false;
@@ -733,15 +871,20 @@
 		return false;
 	}
 
-	// Double-click to finish fence
+	// Double-click to finish fence or zone
 	function handleDblClick(e: MouseEvent) {
 		if (tool === 'fence' && isCreatingFence && fenceVertices.length >= 2) {
 			e.preventDefault();
 			finishFence();
 		}
+
+		if (tool === 'zone' && isCreatingZone && zoneVertices.length >= 3) {
+			e.preventDefault();
+			finishZone();
+		}
 	}
 
-	// Keyboard handler for fence tool (Enter to finish, Escape to cancel)
+	// Keyboard handler for fence/zone tools (Enter to finish, Escape to cancel)
 	function handleKeyDown(e: KeyboardEvent) {
 		if (tool === 'fence' && isCreatingFence) {
 			if (e.key === 'Enter' && fenceVertices.length >= 2) {
@@ -750,6 +893,56 @@
 			} else if (e.key === 'Escape') {
 				e.preventDefault();
 				cancelFence();
+			}
+		}
+
+		if (tool === 'zone' && isCreatingZone) {
+			// Distance input: capture digits, '.', "'", '"', backspace while creating
+			if (zoneVertices.length > 0 && !zoneCreationDragging) {
+				if (/^[0-9.'\"ftinFTIN ]$/.test(e.key)) {
+					e.preventDefault();
+					zoneDistanceInput += e.key;
+					const parsed = parseZoneDistance(zoneDistanceInput);
+					if (parsed !== null && parsed > 0) {
+						zoneDistanceLocked = parsed;
+					}
+					return;
+				}
+				if (e.key === 'Backspace') {
+					e.preventDefault();
+					zoneDistanceInput = zoneDistanceInput.slice(0, -1);
+					if (zoneDistanceInput) {
+						const parsed = parseZoneDistance(zoneDistanceInput);
+						zoneDistanceLocked = parsed !== null && parsed > 0 ? parsed : null;
+					} else {
+						zoneDistanceLocked = null;
+					}
+					return;
+				}
+			}
+			if (e.key === 'Enter') {
+				if (zoneDistanceInput && zoneDistanceLocked === null) {
+					// Try to parse as distance on Enter
+					const parsed = parseZoneDistance(zoneDistanceInput);
+					if (parsed !== null && parsed > 0) {
+						zoneDistanceLocked = parsed;
+					}
+					e.preventDefault();
+					return;
+				}
+				if (zoneVertices.length >= 3) {
+					e.preventDefault();
+					finishZone();
+				}
+			} else if (e.key === 'Escape') {
+				e.preventDefault();
+				if (zoneDistanceInput) {
+					// First Escape clears the distance input
+					zoneDistanceInput = '';
+					zoneDistanceLocked = null;
+				} else {
+					cancelZone();
+				}
 			}
 		}
 	}
@@ -993,12 +1186,30 @@
 		onMoveVertex(fenceId, vertexIndex, newX, newY);
 	}
 
+	// Zone move handler - moves entire zone by delta
+	function handleZoneMove(id: Id<'zones'>, deltaX: number, deltaY: number) {
+		if (!onMoveZone) return;
+		const deltaInchesX = deltaX / scale;
+		const deltaInchesY = deltaY / scale;
+		onMoveZone(id, deltaInchesX, deltaInchesY);
+	}
+
+	// Zone vertex move handler - moves a single vertex
+	function handleZoneVertexMove(zoneId: Id<'zones'>, vertexIndex: number, newX: number, newY: number) {
+		onMoveZoneVertex?.(zoneId, vertexIndex, newX, newY);
+	}
+
+	// Zone control point move handler - moves a bezier control point
+	function handleZoneControlPointMove(zoneId: Id<'zones'>, vertexIndex: number, cpType: 'cp1' | 'cp2', x: number, y: number) {
+		onMoveZoneControlPoint?.(zoneId, vertexIndex, cpType, x, y);
+	}
+
 </script>
 
 <svg
 	bind:this={svgElement}
 	class="w-full h-full border border-border rounded-lg shadow-inner touch-none"
-	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'};"
+	style="cursor: {isPanning ? 'grabbing' : tool === 'select' ? 'grab' : 'crosshair'}; outline: none;"
 	onpointerdown={handleCanvasPointerDown}
 	onpointermove={handleCanvasPointerMove}
 	onpointerup={handleCanvasPointerUp}
@@ -1031,27 +1242,43 @@
 	<!-- Rotation wrapper - rotates garden content around viewport center -->
 	<g transform="rotate({rotation}, {viewportWidth / 2}, {viewportHeight / 2})">
 
+	<!-- Field-inch transform group: translate + scale so children use field-inch coordinates -->
+	<g transform="translate({panX},{panY}) scale({scale})">
+
+	<!-- Zones (below shadows and beds) -->
+	{#each zones as zone (zone._id)}
+		<ZoneComponent
+			{zone}
+			vertices={zone.vertices}
+			{scale}
+			isSelected={selectedZoneIds.has(zone._id)}
+			{selectedZoneIds}
+			onSelect={(id, shiftKey) => onSelectZone?.(id, shiftKey)}
+			onMove={handleZoneMove}
+			onMoveVertex={handleZoneVertexMove}
+			onMoveControlPoint={handleZoneControlPointMove}
+			{onMoveStart}
+			onMoveEnd={handleMoveEnd}
+		/>
+	{/each}
+
 	<!-- Shadow layer (below beds) -->
 	{#if sunSimulation.enabled && (shadows.length > 0 || allStructureShadows.length > 0) && sunPosition}
-		<ShadowLayer {shadows} fenceShadows={allStructureShadows} {canvasState} sunAltitude={sunPosition.altitude} />
+		<ShadowLayer {shadows} fenceShadows={allStructureShadows} {scale} sunAltitude={sunPosition.altitude} />
 	{/if}
 
 	<!-- Beds and Plants group (for tour spotlight targeting) -->
 	<g data-tour="garden-content">
 		<!-- Beds -->
 		{#each beds as bed (bed._id)}
-			{@const canvasPos = fieldToCanvas(bed.x, bed.y, canvasState)}
 			{@const dims = getBedDimensionsInInches(bed)}
-			{@const widthPx = dims.width * pixelsPerInch * zoom}
-			{@const heightPx = dims.height * pixelsPerInch * zoom}
 			<Bed
 				{bed}
-				x={canvasPos.x}
-				y={canvasPos.y}
-				widthPixels={widthPx}
-				heightPixels={heightPx}
-				{pixelsPerInch}
-				{zoom}
+				x={bed.x}
+				y={bed.y}
+				widthInches={dims.width}
+				heightInches={dims.height}
+				{scale}
 				isSelected={selectedBedIds.has(bed._id)}
 				{selectedBedIds}
 				onSelect={onSelectBed}
@@ -1065,12 +1292,10 @@
 
 		<!-- Fences -->
 		{#each fences as fence (fence._id)}
-			{@const canvasVertices = fence.vertices.map(v => fieldToCanvas(v.x, v.y, canvasState))}
 			<FenceComponent
 				{fence}
-				{canvasVertices}
-				{pixelsPerInch}
-				{zoom}
+				vertices={fence.vertices}
+				{scale}
 				isSelected={selectedFenceIds.has(fence._id)}
 				{selectedFenceIds}
 				onSelect={(id, shiftKey) => onSelectFence?.(id, shiftKey)}
@@ -1085,9 +1310,10 @@
 	{#each plantsWithPositions as plant, plantIndex (plant._id)}
 		<PlantMarker
 			{plant}
-			cx={plant.canvasX}
-			cy={plant.canvasY}
-			spacingRadiusPixels={plant.spacingRadiusPixels}
+			cx={plant.absoluteX}
+			cy={plant.absoluteY}
+			spacingRadius={plant.spacingMin / 2}
+			{scale}
 			heightColor={heightColors.get(plant._id) ?? 'hsl(120, 70%, 50%)'}
 			hasConflict={conflicts.has(plant._id)}
 			isShaded={shadedPlants.has(plant._id)}
@@ -1118,9 +1344,10 @@
 		{@const phaseColor = planned.visibility.phaseColor ?? 'hsl(200, 70%, 50%)'}
 		<PlantMarker
 			plant={{ ...planned, flowerData: planned.flowerData }}
-			cx={planned.canvasX}
-			cy={planned.canvasY}
-			spacingRadiusPixels={planned.spacingRadiusPixels}
+			cx={planned.absoluteX}
+			cy={planned.absoluteY}
+			spacingRadius={planned.flowerData.spacingMin / 2}
+			{scale}
 			heightColor={phaseColor}
 			hasConflict={false}
 			isShaded={shadedPlants.has(planned._id)}
@@ -1139,7 +1366,189 @@
 	{/each}
 	</g>
 
-	<!-- Smart guides overlay (rendered on top during drag) -->
+	<!-- Bed creation preview (field-inch coordinates, counter-scaled strokes) -->
+	{#if isCreatingBed}
+		{@const startField = canvasToField(bedStartX, bedStartY, canvasState)}
+		{@const currentField = canvasToField(bedCurrentX, bedCurrentY, canvasState)}
+		{@const minX = Math.min(startField.x, currentField.x)}
+		{@const minY = Math.min(startField.y, currentField.y)}
+		{@const width = Math.abs(currentField.x - startField.x)}
+		{@const height = Math.abs(currentField.y - startField.y)}
+		{#if tool === 'rectangle'}
+			<rect
+				x={minX}
+				y={minY}
+				{width}
+				{height}
+				fill="rgba(139, 69, 19, 0.2)"
+				stroke="rgba(139, 69, 19, 0.6)"
+				stroke-width={2 / scale}
+				stroke-dasharray="{8 / scale} {4 / scale}"
+				rx={4 / scale}
+				ry={4 / scale}
+			/>
+		{:else if tool === 'circle'}
+			<ellipse
+				cx={minX + width / 2}
+				cy={minY + height / 2}
+				rx={width / 2}
+				ry={height / 2}
+				fill="rgba(139, 69, 19, 0.2)"
+				stroke="rgba(139, 69, 19, 0.6)"
+				stroke-width={2 / scale}
+				stroke-dasharray="{8 / scale} {4 / scale}"
+			/>
+		{/if}
+	{/if}
+
+	<!-- Fence creation preview (field-inch coordinates, counter-scaled strokes) -->
+	{#if isCreatingFence && fenceVertices.length > 0}
+		<!-- Placed vertices line -->
+		{#if fenceVertices.length >= 2}
+			<polyline
+				points={fenceVertices.map(v => `${v.x},${v.y}`).join(' ')}
+				fill="none"
+				stroke="rgb(120, 113, 108)"
+				stroke-width={3 / scale}
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		{/if}
+
+		<!-- Preview line from last vertex to cursor -->
+		{#if fencePreviewPoint}
+			{@const lastVertex = fenceVertices[fenceVertices.length - 1]}
+			<line
+				x1={lastVertex.x}
+				y1={lastVertex.y}
+				x2={fencePreviewPoint.x}
+				y2={fencePreviewPoint.y}
+				stroke="rgb(120, 113, 108)"
+				stroke-width={3 / scale}
+				stroke-dasharray="{8 / scale} {4 / scale}"
+				stroke-linecap="round"
+			/>
+		{/if}
+
+		<!-- Vertex markers -->
+		{#each fenceVertices as vertex}
+			<circle
+				cx={vertex.x}
+				cy={vertex.y}
+				r={6 / scale}
+				fill="white"
+				stroke="rgb(120, 113, 108)"
+				stroke-width={2 / scale}
+			/>
+		{/each}
+	{/if}
+
+	<!-- Zone creation preview (field-inch coordinates, counter-scaled strokes) -->
+	{#if isCreatingZone && zoneVertices.length > 0}
+		<!-- Filled path preview (when >= 3 vertices) -->
+		{#if zoneVertices.length >= 3}
+			{@const previewVerts = zonePreviewPoint ? [...zoneVertices, { x: zonePreviewPoint.x, y: zonePreviewPoint.y }] : zoneVertices}
+			<path
+				d={buildZonePath(previewVerts)}
+				fill="hsla(210, 30%, 60%, 0.15)"
+				stroke="rgb(100, 116, 139)"
+				stroke-width={2 / scale}
+				stroke-dasharray="{8 / scale} {4 / scale}"
+			/>
+		{/if}
+
+		<!-- Edge path (when >= 2 vertices, open path showing placed edges with curves) -->
+		{#if zoneVertices.length >= 2}
+			{@const edgePath = (() => {
+				let d = `M ${zoneVertices[0].x},${zoneVertices[0].y}`;
+				for (let i = 1; i < zoneVertices.length; i++) {
+					const prev = zoneVertices[i - 1];
+					const curr = zoneVertices[i];
+					if (prev.cp1 || curr.cp2) {
+						const cp1x = prev.cp1 ? prev.cp1.x : prev.x;
+						const cp1y = prev.cp1 ? prev.cp1.y : prev.y;
+						const cp2x = curr.cp2 ? curr.cp2.x : curr.x;
+						const cp2y = curr.cp2 ? curr.cp2.y : curr.y;
+						d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${curr.x},${curr.y}`;
+					} else {
+						d += ` L ${curr.x},${curr.y}`;
+					}
+				}
+				return d;
+			})()}
+			<path
+				d={edgePath}
+				fill="none"
+				stroke="rgb(100, 116, 139)"
+				stroke-width={2 / scale}
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		{/if}
+
+		<!-- Preview line to cursor -->
+		{#if zonePreviewPoint && !zoneCreationDragging}
+			{@const lastVert = zoneVertices[zoneVertices.length - 1]}
+			{@const previewDx = zonePreviewPoint.x - lastVert.x}
+			{@const previewDy = zonePreviewPoint.y - lastVert.y}
+			{@const previewDist = Math.sqrt(previewDx * previewDx + previewDy * previewDy)}
+			<line x1={lastVert.x} y1={lastVert.y} x2={zonePreviewPoint.x} y2={zonePreviewPoint.y}
+				  stroke={zoneDistanceLocked ? 'rgb(59, 130, 246)' : 'rgb(100, 116, 139)'} stroke-width={2 / scale} stroke-dasharray="{8 / scale} {4 / scale}" stroke-linecap="round" />
+
+			<!-- Distance label at midpoint of preview line -->
+			{@const midX = (lastVert.x + zonePreviewPoint.x) / 2}
+			{@const midY = (lastVert.y + zonePreviewPoint.y) / 2}
+			{@const displayDist = zoneDistanceLocked ?? previewDist}
+			{@const distFeet = Math.floor(displayDist / 12)}
+			{@const distInches = Math.round(displayDist % 12)}
+			{@const distLabel = zoneDistanceInput || (distFeet > 0 ? `${distFeet}' ${distInches}"` : `${Math.round(displayDist)}"`) }
+			<g transform="translate({midX}, {midY}) scale({1 / scale})">
+				<rect x="-32" y="-12" width="64" height="24" rx="4"
+					fill={zoneDistanceLocked ? 'rgb(59, 130, 246)' : 'hsla(0, 0%, 0%, 0.7)'}
+					class="pointer-events-none" />
+				<text x="0" y="4" text-anchor="middle" fill="white" font-size="12" font-weight="500"
+					class="pointer-events-none select-none">
+					{distLabel}
+				</text>
+			</g>
+
+			<!-- Closing line preview -->
+			{#if zoneVertices.length >= 2}
+				{@const firstVert = zoneVertices[0]}
+				<line x1={zonePreviewPoint.x} y1={zonePreviewPoint.y} x2={firstVert.x} y2={firstVert.y}
+					  stroke="rgb(100, 116, 139)" stroke-width={1 / scale} stroke-dasharray="{4 / scale} {4 / scale}" stroke-linecap="round" opacity="0.5" />
+			{/if}
+		{/if}
+
+		<!-- Control point handles during creation -->
+		{#each zoneVertices as vertex, index}
+			{#if vertex.cp1}
+				<line x1={vertex.x} y1={vertex.y} x2={vertex.cp1.x} y2={vertex.cp1.y}
+					stroke="hsla(210, 80%, 65%, 0.7)" stroke-width={0.5 / scale}
+					stroke-dasharray="{3 / scale} {2 / scale}" class="pointer-events-none" />
+				<circle cx={vertex.cp1.x} cy={vertex.cp1.y} r={4 / scale}
+					fill="hsla(210, 80%, 85%, 1)" stroke="rgb(59, 130, 246)" stroke-width={2 / scale}
+					class="pointer-events-none" />
+			{/if}
+			{#if vertex.cp2}
+				<line x1={vertex.x} y1={vertex.y} x2={vertex.cp2.x} y2={vertex.cp2.y}
+					stroke="hsla(210, 80%, 65%, 0.7)" stroke-width={0.5 / scale}
+					stroke-dasharray="{3 / scale} {2 / scale}" class="pointer-events-none" />
+				<circle cx={vertex.cp2.x} cy={vertex.cp2.y} r={4 / scale}
+					fill="hsla(210, 80%, 85%, 1)" stroke="rgb(59, 130, 246)" stroke-width={2 / scale}
+					class="pointer-events-none" />
+			{/if}
+		{/each}
+
+		<!-- Vertex markers -->
+		{#each zoneVertices as vertex}
+			<circle cx={vertex.x} cy={vertex.y} r={6 / scale} fill="white" stroke="rgb(100, 116, 139)" stroke-width={2 / scale} />
+		{/each}
+	{/if}
+
+	</g><!-- End field-inch transform group -->
+
+	<!-- Smart guides overlay (rendered on top during drag, uses canvas pixels) -->
 	{#if activeGuides.length > 0 || activeDiagonalGuides.length > 0 || activeDistances.length > 0}
 		<SmartGuides
 			guides={activeGuides}
@@ -1151,91 +1560,13 @@
 		/>
 	{/if}
 
-	<!-- Selection distance overlay (when exactly 2 objects selected) -->
+	<!-- Selection distance overlay (when exactly 2 objects selected, uses canvas pixels) -->
 	{#if selectionDistanceInfo}
 		<SelectionDistance
 			distanceInfo={selectionDistanceInfo.info}
 			{canvasState}
 			onDistanceChange={handleSelectionDistanceChange}
 		/>
-	{/if}
-
-	<!-- Bed creation preview -->
-	{#if isCreatingBed}
-		{@const minX = Math.min(bedStartX, bedCurrentX)}
-		{@const minY = Math.min(bedStartY, bedCurrentY)}
-		{@const width = Math.abs(bedCurrentX - bedStartX)}
-		{@const height = Math.abs(bedCurrentY - bedStartY)}
-		{#if tool === 'rectangle'}
-			<rect
-				x={minX}
-				y={minY}
-				{width}
-				{height}
-				fill="rgba(139, 69, 19, 0.2)"
-				stroke="rgba(139, 69, 19, 0.6)"
-				stroke-width="2"
-				stroke-dasharray="8 4"
-				rx="4"
-				ry="4"
-			/>
-		{:else if tool === 'circle'}
-			<ellipse
-				cx={minX + width / 2}
-				cy={minY + height / 2}
-				rx={width / 2}
-				ry={height / 2}
-				fill="rgba(139, 69, 19, 0.2)"
-				stroke="rgba(139, 69, 19, 0.6)"
-				stroke-width="2"
-				stroke-dasharray="8 4"
-			/>
-		{/if}
-	{/if}
-
-	<!-- Fence creation preview -->
-	{#if isCreatingFence && fenceVertices.length > 0}
-		{@const canvasVertices = fenceVertices.map(v => fieldToCanvas(v.x, v.y, canvasState))}
-		{@const previewCanvasPoint = fencePreviewPoint ? fieldToCanvas(fencePreviewPoint.x, fencePreviewPoint.y, canvasState) : null}
-
-		<!-- Placed vertices line -->
-		{#if canvasVertices.length >= 2}
-			<polyline
-				points={canvasVertices.map(v => `${v.x},${v.y}`).join(' ')}
-				fill="none"
-				stroke="rgb(120, 113, 108)"
-				stroke-width="3"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-		{/if}
-
-		<!-- Preview line from last vertex to cursor -->
-		{#if previewCanvasPoint}
-			{@const lastVertex = canvasVertices[canvasVertices.length - 1]}
-			<line
-				x1={lastVertex.x}
-				y1={lastVertex.y}
-				x2={previewCanvasPoint.x}
-				y2={previewCanvasPoint.y}
-				stroke="rgb(120, 113, 108)"
-				stroke-width="3"
-				stroke-dasharray="8 4"
-				stroke-linecap="round"
-			/>
-		{/if}
-
-		<!-- Vertex markers -->
-		{#each canvasVertices as vertex, index}
-			<circle
-				cx={vertex.x}
-				cy={vertex.y}
-				r="6"
-				fill="white"
-				stroke="rgb(120, 113, 108)"
-				stroke-width="2"
-			/>
-		{/each}
 	{/if}
 
 	</g><!-- End rotation wrapper -->

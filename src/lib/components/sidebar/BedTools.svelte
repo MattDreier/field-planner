@@ -2,7 +2,7 @@
 	import { ToggleGroup } from 'bits-ui';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, Bed, SunSimulationState } from '$lib/types';
-	import { MousePointer2, Square, Circle, Fence, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
+	import { MousePointer2, Square, Circle, Fence, Pentagon, Sun, Trash2, MapPin, Magnet } from 'lucide-svelte';
 	import { getMonthName, formatTimeOfDay, getDaylightHours } from '$lib/utils/sun';
 	import { setLatitude } from '$lib/stores/timeline.svelte';
 
@@ -307,6 +307,14 @@
 				>
 					<Fence class="w-4 h-4" />
 				</ToggleGroup.Item>
+
+				<ToggleGroup.Item
+					value="zone"
+					title="Zone Tool (Z)"
+					class="w-8 h-8 rounded-md flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground data-[state=on]:bg-foreground data-[state=on]:text-background"
+				>
+					<Pentagon class="w-4 h-4" />
+				</ToggleGroup.Item>
 			</span>
 
 			<ToggleGroup.Item
@@ -564,6 +572,32 @@
 		</div>
 	{/if}
 
+	<!-- Zone Settings (when zone tool active) -->
+	{#if currentTool === 'zone'}
+		<div class="mt-4 pt-4 border-t border-border flex-1">
+			<h4 class="font-medium text-sm mb-3">Zone Tool</h4>
+			<div class="mt-4 pt-4 border-t border-border space-y-3">
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">How to draw:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li><strong>Click</strong> to add zone vertices</li>
+						<li><strong>Double-click</strong> or press <kbd class="px-1 py-0.5 bg-muted rounded text-[10px]">Enter</kbd> to close polygon</li>
+						<li>Press <kbd class="px-1 py-0.5 bg-muted rounded text-[10px]">Escape</kbd> to cancel</li>
+						<li>Minimum 3 vertices required</li>
+					</ul>
+				</div>
+				<div class="space-y-2">
+					<p class="font-medium text-foreground text-xs">Tips:</p>
+					<ul class="list-disc list-inside space-y-1 text-xs text-muted-foreground">
+						<li>Zones mark areas like lawn, mulch, or patio</li>
+						<li>Select a zone to edit properties</li>
+						<li>Drag vertices to reshape</li>
+					</ul>
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<!-- Shadow Controls (when shadows tool active) -->
 	{#if currentTool === 'shadows'}
 		<div class="mt-4 pt-4 border-t border-border space-y-3">
@@ -670,6 +704,8 @@
 				<p>Click and drag on canvas to create a circular bed.</p>
 			{:else if currentTool === 'fence'}
 				<p>Click to add vertices. Double-click to finish the fence.</p>
+			{:else if currentTool === 'zone'}
+				<p>Click to add vertices. Double-click to close the zone polygon.</p>
 			{:else if currentTool === 'shadows'}
 				<p>Visualize how shadows fall across your garden throughout the day.</p>
 			{/if}

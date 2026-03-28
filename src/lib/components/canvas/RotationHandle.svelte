@@ -5,17 +5,24 @@
 	 */
 
 	interface Props {
-		centerX: number; // bed center X in canvas pixels
-		centerY: number; // bed center Y in canvas pixels
+		centerX: number; // bed center X (field inches when inside scaled group, otherwise canvas pixels)
+		centerY: number; // bed center Y (field inches when inside scaled group, otherwise canvas pixels)
 		currentRotation: number; // current rotation in degrees
-		distance?: number; // distance from center to handle
+		distance?: number; // distance from center to handle (in same coordinate space as centerX/Y)
+		scale?: number; // pixelsPerInch * zoom (for counter-scaling fixed-pixel elements; 1 = no scaling)
 		onRotate: (degrees: number) => void;
 		onRotateStart?: () => void; // Called once when rotation begins (for history snapshot)
 	}
 
-	let { centerX, centerY, currentRotation, distance = 40, onRotate, onRotateStart }: Props = $props();
+	let { centerX, centerY, currentRotation, distance = 40, scale = 1, onRotate, onRotateStart }: Props = $props();
 
 	let isDragging = $state(false);
+
+	// Counter-scaled sizes
+	const handleRadius = $derived(8 / scale);
+	const lineStrokeWidth = $derived(2 / scale);
+	const handleStrokeWidth = $derived(2 / scale);
+	const dashArray = $derived(`${4 / scale} ${2 / scale}`);
 
 	// Calculate handle position based on current rotation
 	// Handle is positioned along the rotation axis (starts at top, moves with rotation)
@@ -76,8 +83,8 @@
 		x2={handleX}
 		y2={handleY}
 		stroke="rgb(59, 130, 246)"
-		stroke-width="2"
-		stroke-dasharray="4 2"
+		stroke-width={lineStrokeWidth}
+		stroke-dasharray={dashArray}
 		class="pointer-events-none"
 	/>
 
@@ -85,10 +92,10 @@
 	<circle
 		cx={handleX}
 		cy={handleY}
-		r="8"
+		r={handleRadius}
 		fill="white"
 		stroke="rgb(59, 130, 246)"
-		stroke-width="2"
+		stroke-width={handleStrokeWidth}
 		class={isDragging ? 'cursor-grabbing' : 'cursor-grab'}
 		onpointerdown={handlePointerDown}
 		onpointermove={handlePointerMove}

@@ -4,31 +4,32 @@
 	 * The ellipse is rotated to point in the shadow direction.
 	 * Opacity fades in based on sun altitude for a natural appearance.
 	 * A gradient makes the shadow tip fade to transparent.
+	 * Expects field-inch coordinates; rendered inside a scaled <g> group.
 	 */
 	import { getEffectiveTheme } from '$lib/stores/theme.svelte';
 
 	interface Props {
-		cx: number; // plant center X in canvas pixels
-		cy: number; // plant center Y in canvas pixels
-		shadowLengthPixels: number; // shadow length in pixels
+		cx: number; // plant center X in field inches
+		cy: number; // plant center Y in field inches
+		shadowLength: number; // shadow length in inches
 		shadowAngle: number; // degrees from North (0-360)
-		plantRadiusPixels: number; // plant visual radius in pixels
+		plantRadius: number; // plant visual radius in inches (counter-scaled from pixels)
 		opacity?: number; // 0-1, based on sun altitude (defaults to 1)
 		plantId: string; // unique ID for gradient definition
 	}
 
-	let { cx, cy, shadowLengthPixels, shadowAngle, plantRadiusPixels, opacity = 1, plantId }: Props = $props();
+	let { cx, cy, shadowLength, shadowAngle, plantRadius, opacity = 1, plantId }: Props = $props();
 
 	// Shadow ellipse dimensions
 	// Width is slightly wider than plant for natural look
-	const shadowWidth = $derived(plantRadiusPixels * 2.5);
+	const shadowWidth = $derived(plantRadius * 2.5);
 
 	// Calculate ellipse center (midpoint between plant and shadow tip)
 	const ellipseCenterX = $derived(
-		cx + Math.sin((shadowAngle * Math.PI) / 180) * (shadowLengthPixels / 2)
+		cx + Math.sin((shadowAngle * Math.PI) / 180) * (shadowLength / 2)
 	);
 	const ellipseCenterY = $derived(
-		cy - Math.cos((shadowAngle * Math.PI) / 180) * (shadowLengthPixels / 2)
+		cy - Math.cos((shadowAngle * Math.PI) / 180) * (shadowLength / 2)
 	);
 
 	// Unique gradient ID for this shadow instance
@@ -51,7 +52,7 @@
 	cx={ellipseCenterX}
 	cy={ellipseCenterY}
 	rx={shadowWidth / 2}
-	ry={shadowLengthPixels / 2}
+	ry={shadowLength / 2}
 	transform="rotate({shadowAngle}, {ellipseCenterX}, {ellipseCenterY})"
 	fill="url(#{gradientId})"
 	class="pointer-events-none"

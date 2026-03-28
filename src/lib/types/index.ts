@@ -49,6 +49,17 @@ export interface FenceVertex {
 	y: number;
 }
 
+// Zone vertex with optional cubic bezier control points
+export interface ZoneVertex {
+	x: number;  // vertex position in field inches
+	y: number;
+	// Optional cubic bezier control points (absolute positions in field inches)
+	// cp1 = outgoing handle (controls curve LEAVING this vertex toward next)
+	// cp2 = incoming handle (controls curve ARRIVING at this vertex from prev)
+	cp1?: { x: number; y: number };
+	cp2?: { x: number; y: number };
+}
+
 // Fence interface
 export interface Fence {
 	_id: Id<'fences'>;
@@ -58,6 +69,29 @@ export interface Fence {
 	name?: string;
 	color?: string;
 	createdAt: number;
+}
+
+// Zone classification
+export type ZoneType = 'lawn' | 'mulch' | 'rocks' | 'water' | 'landscape_fabric' | 'patio' | 'other';
+
+// Zone entity
+export interface Zone {
+	_id: Id<'zones'>;
+	layoutId: Id<'layouts'>;
+	vertices: ZoneVertex[];
+	zoneType: ZoneType;
+	name?: string;
+	depthInches?: number;
+	fabricWidthInches?: number;
+	fabricOverlapInches?: number;
+	fabricRotationDeg?: number; // rotation of fabric seams in degrees (0 = horizontal)
+	createdAt: number;
+}
+
+// Volume calculation result
+export interface VolumeResult {
+	cubicFeet: number;
+	cubicYards: number;
 }
 
 // Timeline planting dates
@@ -149,7 +183,7 @@ export interface CanvasState {
 }
 
 // Active tool
-export type Tool = 'select' | 'rectangle' | 'circle' | 'fence' | 'shadows';
+export type Tool = 'select' | 'rectangle' | 'circle' | 'fence' | 'zone' | 'shadows';
 
 // Drag source for drag-and-drop
 export type DragSource =
