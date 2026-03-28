@@ -148,7 +148,7 @@
 <div
 	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all {holdReady ? 'scale-[1.02] ring-2 ring-primary/40' : ''}"
 	class:select-none={pending || plantDragState.isDragging}
-	style="touch-action: {pending ? 'none' : 'pan-y'};"
+	style="touch-action: {pending || plantDragState.isDragging ? 'none' : 'pan-y'};"
 	onpointerdown={handlePointerDown}
 	onpointermove={handlePointerMove}
 	onpointerup={handlePointerUp}
