@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PlantData } from '$lib/data/plants';
 	import { formatHeight } from '$lib/utils/color';
-	import { startPlantDrag, plantDragState } from '$lib/stores/plantDrag.svelte';
+	import { startPlantDrag, updatePlantDragPosition, plantDragState } from '$lib/stores/plantDrag.svelte';
 
 	interface Props {
 		plant: PlantData;
@@ -52,9 +52,16 @@
 	}
 
 	function handlePointerMove(e: PointerEvent) {
-		if (!pending || !e.isPrimary) return;
-		// Once committed, the page-level handlers take over
-		if (plantDragState.isDragging) return;
+		if (!e.isPrimary) return;
+
+		// Forward position updates during active drag (touch implicit capture keeps events on this element)
+		if (plantDragState.isDragging) {
+			e.preventDefault();
+			updatePlantDragPosition(e.clientX, e.clientY);
+			return;
+		}
+
+		if (!pending) return;
 
 		const dx = e.clientX - startX;
 		const dy = e.clientY - startY;
@@ -75,12 +82,25 @@
 	function handlePointerUp(e: PointerEvent) {
 		if (!e.isPrimary) return;
 
-		const wasPending = pending;
 		const wasDragging = plantDragState.isDragging;
+		const wasPending = pending;
+
+		// Release capture and clean up pending state
 		cancelPending();
 
+		if (wasDragging) {
+			// Dispatch a synthetic pointerup on window so the page-level drop handler fires
+			// reliably on touch (implicit capture can prevent natural bubbling to window)
+			window.dispatchEvent(new PointerEvent('plantdrop', {
+				clientX: e.clientX,
+				clientY: e.clientY,
+				bubbles: false
+			}));
+			return;
+		}
+
 		// If we never committed a drag, treat as click
-		if (wasPending && !wasDragging && onClick) {
+		if (wasPending && onClick) {
 			onClick();
 		}
 	}
@@ -88,7 +108,8 @@
 	function commitDrag(clientX: number, clientY: number) {
 		pending = false;
 		clearHoldTimer();
-		releaseCapture(); // Release so page-level handlers take over
+		// Keep pointer capture — on touch, implicit capture means events stay on this element,
+		// so we need to keep forwarding them from handlePointerMove/handlePointerUp
 		startPlantDrag(
 			{
 				flowerId: plant.id,

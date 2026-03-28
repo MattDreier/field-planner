@@ -10,6 +10,7 @@
 	import SuccessionPlanner from '$lib/components/timeline/SuccessionPlanner.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Tool, Bed, PlacedPlant, Fence, FenceVertex, SunSimulationState, GardenSettings, PlantingDates, ScheduleContext } from '$lib/types';
+	import { onMount } from 'svelte';
 	import { plantDragState, updatePlantDragPosition, endPlantDrag } from '$lib/stores/plantDrag.svelte';
 	import DragGhost from '$lib/components/ui/DragGhost.svelte';
 	import type { Id } from '../convex/_generated/dataModel';
@@ -671,15 +672,27 @@
 
 	function handleWindowPointerUp(e: PointerEvent) {
 		if (!plantDragState.isDragging) return;
+		dropPlantAtPoint(e.clientX, e.clientY);
+	}
 
-		// Try to drop on the canvas
+	function handlePlantDrop(e: Event) {
+		const pe = e as PointerEvent;
+		if (!plantDragState.isDragging) return;
+		dropPlantAtPoint(pe.clientX, pe.clientY);
+	}
+
+	function dropPlantAtPoint(clientX: number, clientY: number) {
 		if (fieldCanvas) {
-			fieldCanvas.tryDropAtPoint(e.clientX, e.clientY);
+			fieldCanvas.tryDropAtPoint(clientX, clientY);
 		}
-
-		// Always end drag (even if drop missed a bed)
 		endPlantDrag();
 	}
+
+	// Listen for custom plantdrop event from PlantCard (touch implicit capture workaround)
+	onMount(() => {
+		window.addEventListener('plantdrop', handlePlantDrop);
+		return () => window.removeEventListener('plantdrop', handlePlantDrop);
+	});
 
 	// Copy/Paste/Select All handlers
 	function handleCopy() {
