@@ -101,8 +101,8 @@ interface RelativeToFrostTiming {
   weeksOffsetMax: number;
   method: 'indoor' | 'direct';
 }
-// IMPORTANT: Offsets are negative for "before frost" (e.g., 8 weeks before = -8).
-// weeksOffsetMin must be <= weeksOffsetMax (e.g., min: -8, max: -6 means "6–8 weeks before").
+// IMPORTANT: Offsets must be POSITIVE. The scheduling code negates them internally.
+// weeksOffsetMin must be <= weeksOffsetMax (e.g., min: 6, max: 8 means "6–8 weeks before frost").
 
 // Option 2: Soil temperature threshold
 interface SoilTemperatureTiming {

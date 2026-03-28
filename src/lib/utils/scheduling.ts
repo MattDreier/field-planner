@@ -87,8 +87,11 @@ function getSoilTempOffset(targetTemp: number): number {
 function calculateDateFromTiming(timing: PlantingTiming, context: ScheduleContext): Date {
 	switch (timing.type) {
 		case 'relative-to-frost': {
-			// Use weeksOffsetMax for conservative timing
-			const daysOffset = timing.weeksOffsetMax * 7;
+			// Normalize: ensure positive offsets and min <= max
+			const absMin = Math.abs(timing.weeksOffsetMin);
+			const absMax = Math.abs(timing.weeksOffsetMax);
+			const weeksOffset = Math.max(absMin, absMax);
+			const daysOffset = weeksOffset * 7;
 			if (timing.reference === 'last') {
 				return addDays(context.lastFrostDate, -daysOffset);
 			} else {
