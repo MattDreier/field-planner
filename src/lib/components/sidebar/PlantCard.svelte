@@ -143,12 +143,31 @@
 		capturedTarget = null;
 		capturedPointerId = 0;
 	}
+
+	// Svelte action: non-passive touchmove listener to prevent browser gesture takeover.
+	// touch-action CSS is evaluated at touch-start BEFORE JS runs, so dynamic CSS can't help.
+	// This handler runs before the browser commits to scrolling and preventDefault() keeps
+	// pointer events flowing during the drag.
+	function preventTouchDefault(node: HTMLElement) {
+		function onTouchMove(e: TouchEvent) {
+			if (pending || plantDragState.isDragging) {
+				e.preventDefault();
+			}
+		}
+		node.addEventListener('touchmove', onTouchMove, { passive: false });
+		return {
+			destroy() {
+				node.removeEventListener('touchmove', onTouchMove);
+			}
+		};
+	}
 </script>
 
 <div
 	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all {holdReady ? 'scale-[1.02] ring-2 ring-primary/40' : ''}"
 	class:select-none={pending || plantDragState.isDragging}
-	style="touch-action: {pending || plantDragState.isDragging ? 'none' : 'pan-y'};"
+	style="touch-action: pan-y;"
+	use:preventTouchDefault
 	onpointerdown={handlePointerDown}
 	onpointermove={handlePointerMove}
 	onpointerup={handlePointerUp}
