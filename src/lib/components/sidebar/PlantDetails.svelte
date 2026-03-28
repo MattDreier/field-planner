@@ -196,13 +196,15 @@
 							<p class="text-sm">{plant.wateringNeeds}</p>
 						</div>
 					</div>
-					<div class="flex items-start gap-3">
-						<Thermometer class="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
-						<div>
-							<p class="text-xs text-muted-foreground">Germination Temp</p>
-							<p class="text-sm">{plant.germinationTempMin}-{plant.germinationTempMax}°F</p>
+					{#if plant.germinationTempMin > 0 || plant.germinationTempMax > 0}
+						<div class="flex items-start gap-3">
+							<Thermometer class="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
+							<div>
+								<p class="text-xs text-muted-foreground">Germination Temp</p>
+								<p class="text-sm">{plant.germinationTempMin}-{plant.germinationTempMax}°F</p>
+							</div>
 						</div>
-					</div>
+					{/if}
 				</div>
 			</div>
 
@@ -216,16 +218,22 @@
 				</div>
 			</div>
 
-			<!-- Germination -->
-			<div>
-				<h3 class="text-sm font-medium mb-2">Germination</h3>
-				<p class="text-sm">
-					{formatRange(plant.daysToGermination, plant.daysToGerminationMax)} days
-				</p>
-				{#if plant.germinationNotes}
-					<p class="text-sm text-muted-foreground mt-1">{plant.germinationNotes}</p>
-				{/if}
-			</div>
+			<!-- Germination / Propagation -->
+			{#if plant.daysToGermination > 0 || plant.germinationNotes}
+				<div>
+					<h3 class="text-sm font-medium mb-2">
+						{plant.propagationMethod === 'seed' ? 'Germination' : 'Propagation'}
+					</h3>
+					{#if plant.daysToGermination > 0}
+						<p class="text-sm">
+							{formatRange(plant.daysToGermination, plant.daysToGerminationMax)} days
+						</p>
+					{/if}
+					{#if plant.germinationNotes}
+						<p class="text-sm text-muted-foreground mt-1">{plant.germinationNotes}</p>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- Harvest Info (kind-specific) -->
 			{#if plant.kind === 'flower'}
