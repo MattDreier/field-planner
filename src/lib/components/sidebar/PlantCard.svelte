@@ -17,6 +17,8 @@
 	let startX = $state(0);
 	let startY = $state(0);
 	let holdReady = $state(false); // Visual feedback for touch hold
+	let capturedTarget = $state<Element | null>(null);
+	let capturedPointerId = $state<number>(0);
 
 	const MOUSE_DRAG_THRESHOLD = 5;
 	const TOUCH_HOLD_MS = 200;
@@ -24,8 +26,13 @@
 
 	function handlePointerDown(e: PointerEvent) {
 		if (e.button !== 0 || !e.isPrimary) return;
-		// Don't start a new drag if one is already active
 		if (plantDragState.isDragging) return;
+
+		e.preventDefault(); // Prevent text selection
+		const target = e.currentTarget as Element;
+		target.setPointerCapture(e.pointerId);
+		capturedTarget = target;
+		capturedPointerId = e.pointerId;
 
 		pending = true;
 		pointerType = e.pointerType;
@@ -81,6 +88,7 @@
 	function commitDrag(clientX: number, clientY: number) {
 		pending = false;
 		clearHoldTimer();
+		releaseCapture(); // Release so page-level handlers take over
 		startPlantDrag(
 			{
 				flowerId: plant.id,
@@ -97,6 +105,7 @@
 		pending = false;
 		holdReady = false;
 		clearHoldTimer();
+		releaseCapture();
 	}
 
 	function clearHoldTimer() {
@@ -105,17 +114,24 @@
 			holdTimer = null;
 		}
 	}
-</script>
 
-<svelte:window
-	onpointermove={handlePointerMove}
-	onpointerup={handlePointerUp}
-/>
+	function releaseCapture() {
+		if (capturedTarget && capturedPointerId) {
+			try { capturedTarget.releasePointerCapture(capturedPointerId); } catch {}
+		}
+		capturedTarget = null;
+		capturedPointerId = 0;
+	}
+</script>
 
 <div
 	class="group p-3 border border-border rounded-lg bg-card hover:border-primary/50 hover:bg-accent/50 cursor-grab active:cursor-grabbing transition-all {holdReady ? 'scale-[1.02] ring-2 ring-primary/40' : ''}"
-	style="touch-action: pan-y;"
+	class:select-none={pending || plantDragState.isDragging}
+	style="touch-action: {pending ? 'none' : 'pan-y'};"
 	onpointerdown={handlePointerDown}
+	onpointermove={handlePointerMove}
+	onpointerup={handlePointerUp}
+	onpointercancel={() => cancelPending()}
 	onkeydown={(e) => e.key === 'Enter' && onClick?.()}
 	role="button"
 	tabindex="0"
